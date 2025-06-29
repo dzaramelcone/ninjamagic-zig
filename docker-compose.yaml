@@ -1,0 +1,44 @@
+networks:
+  slow-net:
+    external: true
+    name: slow-net
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ziguser
+      POSTGRES_PASSWORD: zigpass
+      POSTGRES_DB: zigdb
+    volumes:
+      - .db:/var/lib/postgresql/data
+      - .db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+
+  app:
+    build: 
+      context: .
+      target: runtime
+    platform: "linux/amd64"
+    depends_on: [db]
+    networks: [slow-net]
+    environment:
+      DATABASE_URL: postgres://ziguser:zigpass@db:5432/zigdb
+    ports:
+      - "9862:9862"
+      - "9224:9224"
+
+  netem:
+    build:
+      context: .
+      target: slow
+    environment:
+      NETEM_IFACE: br_slow
+      NETEM_DELAY: 120ms
+      NETEM_JITTER: 20ms
+      NETEM_LOSS: 0.5%
+      NETEM_RATE: 40mbit
+    network_mode: host
+    privileged: true
+    profiles: ["slow"]

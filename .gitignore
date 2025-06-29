@@ -1,0 +1,4 @@
+.db
+.zig-cache
+logs
+zig-out
