@@ -6,16 +6,15 @@ RUN apk add --no-cache curl xz tar
 RUN curl -sSL https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz | tar -xJ --strip-components=1 -C /usr/local/bin
 RUN zig version
 # Install sqlc.
-RUN curl -v -sSL https://downloads.sqlc.dev/sqlc_1.29.0_linux_arm64.tar.gz | tar -xz -C /usr/local/bin sqlc
+RUN curl -sSL https://downloads.sqlc.dev/sqlc_1.29.0_linux_arm64.tar.gz | tar -xz -C /usr/local/bin sqlc
 WORKDIR /repo/
 COPY . .
-RUN sqlc generate
-RUN set -x; zig build -Dtarget=aarch64-linux-musl;
+RUN --mount=type=cache,target=/root/.cache zig build -Dtarget=aarch64-linux-musl;
 
 # ──────────── deploy + runtime ────────
 FROM alpine:latest AS runtime
 RUN apk add --no-cache openssl ca-certificates
-COPY --from=build /src/zig-out/bin/mud /usr/local/bin/mud
+COPY --from=build /repo/zig-out/bin/mud /usr/local/bin/mud
 
 EXPOSE 9862 9224
 ENTRYPOINT ["/usr/local/bin/mud"]

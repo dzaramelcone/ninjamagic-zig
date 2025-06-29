@@ -12,15 +12,15 @@ pub const PoolQuerier = Querier(*pg.Pool);
 pub fn Querier(comptime T: type) type {
     return struct {
         const Self = @This();
-        
+
         allocator: Allocator,
         conn: T,
 
         pub fn init(allocator: Allocator, conn: T) Self {
             return .{ .allocator = allocator, .conn = conn };
         }
-        
-        const create_user_sql = 
+
+        const create_user_sql =
             \\INSERT INTO users (
             \\    name, 
             \\    email, 
@@ -55,7 +55,7 @@ pub fn Querier(comptime T: type) type {
             defer if (T == *pg.Pool) {
                 self.conn.release(conn);
             };
-            _ = try conn.exec(create_user_sql, .{ 
+            _ = try conn.exec(create_user_sql, .{
                 create_user_params.name,
                 create_user_params.email,
                 create_user_params.password,
@@ -65,7 +65,7 @@ pub fn Querier(comptime T: type) type {
             });
         }
 
-        const get_user_sql = 
+        const get_user_sql =
             \\SELECT id, name, email, password, role, ip_address, salary, notes, created_at, updated_at, archived_at FROM users
             \\WHERE id = $1 LIMIT 1
         ;
@@ -82,7 +82,7 @@ pub fn Querier(comptime T: type) type {
             defer if (T == *pg.Pool) {
                 self.conn.release(conn);
             };
-            const result = try conn.query(get_user_sql, .{ 
+            const result = try conn.query(get_user_sql, .{
                 id,
             });
             defer result.deinit();
@@ -157,7 +157,7 @@ pub fn Querier(comptime T: type) type {
             };
         }
 
-        const get_user_by_email_sql = 
+        const get_user_by_email_sql =
             \\SELECT id, name, email, password, role, ip_address, salary, notes, created_at, updated_at, archived_at FROM users
             \\WHERE email = $1 LIMIT 1
         ;
@@ -174,7 +174,7 @@ pub fn Querier(comptime T: type) type {
             defer if (T == *pg.Pool) {
                 self.conn.release(conn);
             };
-            const result = try conn.query(get_user_by_email_sql, .{ 
+            const result = try conn.query(get_user_by_email_sql, .{
                 email,
             });
             defer result.deinit();
@@ -249,7 +249,7 @@ pub fn Querier(comptime T: type) type {
             };
         }
 
-        const get_user_salaries_sql = 
+        const get_user_salaries_sql =
             \\SELECT id, email, salary FROM users
             \\WHERE salary >= $1 AND salary <= $2
         ;
@@ -281,7 +281,7 @@ pub fn Querier(comptime T: type) type {
             defer if (T == *pg.Pool) {
                 self.conn.release(conn);
             };
-            const result = try conn.query(get_user_salaries_sql, .{ 
+            const result = try conn.query(get_user_salaries_sql, .{
                 minimum,
                 maximum,
             });
@@ -319,7 +319,7 @@ pub fn Querier(comptime T: type) type {
             return try out.toOwnedSlice();
         }
 
-        const get_users_sql = 
+        const get_users_sql =
             \\SELECT id, name, email, password, role, ip_address, salary, notes, created_at, updated_at, archived_at FROM users
         ;
 
@@ -411,7 +411,7 @@ pub fn Querier(comptime T: type) type {
             return try out.toOwnedSlice();
         }
 
-        const get_users_by_role_sql = 
+        const get_users_by_role_sql =
             \\SELECT id, name, email, password, role, ip_address, salary, notes, created_at, updated_at, archived_at FROM users
             \\WHERE role = $1
         ;
@@ -428,7 +428,7 @@ pub fn Querier(comptime T: type) type {
             defer if (T == *pg.Pool) {
                 self.conn.release(conn);
             };
-            const result = try conn.query(get_users_by_role_sql, .{ 
+            const result = try conn.query(get_users_by_role_sql, .{
                 role,
             });
             defer result.deinit();
@@ -505,6 +505,5 @@ pub fn Querier(comptime T: type) type {
 
             return try out.toOwnedSlice();
         }
-
     };
 }

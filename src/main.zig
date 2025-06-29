@@ -137,7 +137,7 @@ fn dbCatch(err: anyerror, pool: *pg.Pool) !void {
 pub fn do_queries(alloc: std.mem.Allocator) !void {
     var pool = try pg.Pool.init(alloc, .{ .size = 1, .connect = .{
         .port = 5432,
-        .host = "127.0.0.1",
+        .host = "db",
     }, .auth = .{
         .username = "ziguser",
         .password = "zigpass",

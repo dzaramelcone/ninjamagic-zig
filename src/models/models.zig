@@ -1,15 +1,14 @@
 // Generated with sqlc v1.29.0
- 
+
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 const pg = @import("pg");
 
 pub const UserRole = enum {
-    @"admin",
-    @"user",
+    admin,
+    user,
 };
-
 
 pub const User = struct {
     __allocator: Allocator,
