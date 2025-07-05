@@ -10,6 +10,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // External deps.
     const zzz = b.dependency("zzz", .{
         .target = target,
         .optimize = optimize,
@@ -19,14 +20,39 @@ pub fn build(b: *std.Build) void {
     const pg = b.dependency("pg", .{
         .target = target,
         .optimize = optimize,
-    });
-    exe_mod.addImport("pg", pg.module("pg"));
+    }).module("pg");
+    exe_mod.addImport("pg", pg);
 
     const ws = b.dependency("websocket", .{
         .target = target,
         .optimize = optimize,
+    }).module("websocket");
+    exe_mod.addImport("websocket", ws);
+
+    // Internal deps.
+    const embed = b.addModule("embed", .{
+        .root_source_file = b.path("embed/module.zig"),
     });
-    exe_mod.addImport("websocket", ws.module("websocket"));
+    embed.addImport("zzz", zzz);
+
+    const core = b.addModule("core", .{
+        .root_source_file = b.path("src/core/module.zig"),
+    });
+
+    core.addImport("zzz", zzz);
+    core.addImport("pg", pg);
+    core.addImport("websocket", ws);
+    exe_mod.addImport("core", core);
+
+    const net = b.addModule("net", .{
+        .root_source_file = b.path("src/net/module.zig"),
+    });
+    net.addImport("zzz", zzz);
+    net.addImport("pg", pg);
+    net.addImport("websocket", ws);
+    net.addImport("core", core);
+    net.addImport("embed", embed);
+    exe_mod.addImport("net", net);
 
     const exe = b.addExecutable(.{
         .name = "mud",
