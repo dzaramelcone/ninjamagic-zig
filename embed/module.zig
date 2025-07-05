@@ -1,18 +1,18 @@
-const std = @import("std");
+const Mime = @import("zzz").HTTP.Mime;
 
-pub const Entry = struct {
+pub const HostedFile = struct {
     path: []const u8,
     bytes: []const u8,
-    mime: std.http.MimeType,
+    mime: Mime,
 };
 
-pub const files = [_]Entry{ .{
+pub const hosted_files = [_]HostedFile{ .{
     .path = "/xterm.js",
-    .bytes = @embedFile("view/vendor/xterm.js"),
+    .bytes = @embedFile("vendor/xterm.js"),
     .mime = .JS,
 }, .{
     .path = "/xterm.css",
-    .bytes = @embedFile("view/vendor/xterm.css"),
+    .bytes = @embedFile("vendor/xterm.js"),
     .mime = .CSS,
 }, .{
     .path = "/main.js",
