@@ -1,6 +1,6 @@
 const std = @import("std");
 const ws = @import("websocket");
-const cfg = @import("config.zig").Config;
+const cfg = @import("core").Config;
 
 const App = struct {};
 const WsHandler = struct {
@@ -18,7 +18,7 @@ const WsHandler = struct {
     }
 };
 
-pub fn runWsServer(alloc: std.mem.Allocator) !void {
+pub fn host(alloc: std.mem.Allocator) !void {
     // start the ws_server. TODO: move this into tardy if possible
     var ws_server = try ws.Server(WsHandler).init(alloc, cfg.Ws);
     defer ws_server.deinit();

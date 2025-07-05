@@ -1,7 +1,7 @@
 const std = @import("std");
 const zzz = @import("zzz");
-const cfg = @import("config.zig").Config;
-const assets = @import("assets.zig");
+const embed = @import("embed");
+const cfg = @import("core").Config.Zzz;
 
 const Tardy = zzz.tardy.Tardy(.auto);
 const Runtime = zzz.tardy.Runtime;
@@ -14,35 +14,36 @@ const Context = zzz.HTTP.Context;
 const Route = zzz.HTTP.Route;
 const Respond = zzz.HTTP.Respond;
 
+const html_content =
+    \\ <!DOCTYPE html>
+    \\ <html>
+    \\ <head>
+    \\   <meta charset="utf-8">
+    \\   <title>MUD Terminal</title>
+    \\   <link rel="stylesheet" href="/xterm.css">
+    \\   <script src="/xterm.js"></script>
+    \\ </head>
+    \\ <body style="margin:0; height:100vh;">
+    \\   <div id="terminal" style="width:100%; height:100%;"></div>
+    \\   <script>
+    \\     const term = new Terminal();
+    \\     term.open(document.getElementById('terminal'));
+    \\     const ws = new WebSocket(`ws://${location.hostname}:${location.port}/`);
+    \\     ws.onmessage = e => term.write(e.data);
+    \\     term.onData(data => ws.send(data));
+    \\   </script>
+    \\ </body>
+    \\ </html>
+;
 fn baseHandler(ctx: *const Context, _: void) !Respond {
-    const html_content =
-        \\ <!DOCTYPE html>
-        \\ <html>
-        \\ <head>
-        \\   <meta charset="utf-8">
-        \\   <title>MUD Terminal</title>
-        \\   <link rel="stylesheet" href="/xterm.css">
-        \\   <script src="/xterm.js"></script>
-        \\ </head>
-        \\ <body style="margin:0; height:100vh;">
-        \\   <div id="terminal" style="width:100%; height:100%;"></div>
-        \\   <script>
-        \\     const term = new Terminal();
-        \\     term.open(document.getElementById('terminal'));
-        \\     const ws = new WebSocket(`ws://${location.hostname}:${location.port}/`);
-        \\     ws.onmessage = e => term.write(e.data);
-        \\     term.onData(data => ws.send(data));
-        \\   </script>
-        \\ </body>
-        \\ </html>
-    ;
     return ctx.response.apply(.{
         .status = .OK,
         .mime = zzz.HTTP.Mime.HTML,
         .body = html_content,
     });
 }
-fn serveStatic(comptime entry: assets.Entry) *const fn (*const Context, void) anyerror!Respond {
+
+fn serveStatic(comptime entry: embed.HostedFile) *const fn (*const Context, void) anyerror!Respond {
     return struct {
         fn handler(ctx: *const Context, _: void) !Respond {
             return ctx.response.apply(.{
@@ -56,25 +57,23 @@ fn serveStatic(comptime entry: assets.Entry) *const fn (*const Context, void) an
         }
     }.handler;
 }
+
 fn layers() []const Layer {
-    const out: [1 + assets.files.len]Layer = undefined;
+    var out: [1 + embed.hosted_files.len]Layer = undefined;
     out[0] = Route.init("/").get({}, baseHandler).layer();
-    inline for (assets.files, 0..) |file, i| {
-        out[i + 1] = zzz.HTTP.Route
-            .init(file.path)
-            .get({}, serveStatic(file))
+    for (embed.hosted_files, 0..) |page, i| {
+        out[1 + i] = zzz.HTTP.Route
+            .init(page.path)
+            .get({}, serveStatic(page))
             .layer();
     }
     return out;
 }
-const layers_list = layers();
 
 pub fn host(alloc: std.mem.Allocator) !void {
-
-    // make Tardy for zzz
     var t = try Tardy.init(alloc, .{ .threading = .auto });
     defer t.deinit();
-    var router = try Router.init(alloc, &layers_list, .{});
+    var router = try Router.init(alloc, layers(), .{});
     defer router.deinit(alloc);
 
     var socket = try Socket.init(cfg.Zzz.addr);
