@@ -1,10 +1,10 @@
 const std = @import("std");
 const pg = @import("pg");
-const cfg = @import("config.zig").cfg;
-const Users = @import("models/queries.sql.zig").PoolQuerier;
+const cfg = @import("core").Config;
+const Users = @import("db/sqlc-out//queries.sql.zig").PoolQuerier;
 
 pub fn doQueries(alloc: std.mem.Allocator) !void {
-    var pool = try pg.Pool.init(alloc, .{});
+    var pool = try pg.Pool.init(alloc, cfg.Pg);
     defer pool.deinit();
 
     const querier = Users.init(alloc, pool);
