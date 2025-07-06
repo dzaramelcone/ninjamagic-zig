@@ -50,36 +50,29 @@ fn serveStatic(comptime entry: embed.HostedFile) *const fn (*const Context, void
                 .status = .OK,
                 .mime = entry.mime,
                 .body = entry.bytes,
-                .headers = .{
-                    .cache_control = "max-age=31536000, immutable",
-                },
             });
         }
     }.handler;
 }
 
-fn layers() []const Layer {
-    var out: [1 + embed.hosted_files.len]Layer = undefined;
-    out[0] = Route.init("/").get({}, baseHandler).layer();
-    for (embed.hosted_files, 0..) |page, i| {
-        out[1 + i] = zzz.HTTP.Route
-            .init(page.path)
-            .get({}, serveStatic(page))
-            .layer();
-    }
-    return out;
-}
+const layers: [5]Layer = .{
+    Route.init("/").get({}, baseHandler).layer(),
+    Route.init(embed.hosted_files[0].path).get({}, serveStatic(embed.hosted_files[0])).layer(),
+    Route.init(embed.hosted_files[1].path).get({}, serveStatic(embed.hosted_files[1])).layer(),
+    Route.init(embed.hosted_files[2].path).get({}, serveStatic(embed.hosted_files[2])).layer(),
+    Route.init(embed.hosted_files[3].path).get({}, serveStatic(embed.hosted_files[3])).layer(),
+};
 
 pub fn host(alloc: std.mem.Allocator) !void {
     var t = try Tardy.init(alloc, .{ .threading = .auto });
     defer t.deinit();
-    var router = try Router.init(alloc, layers(), .{});
+    var router = try Router.init(alloc, &layers, .{});
     defer router.deinit(alloc);
 
-    var socket = try Socket.init(cfg.Zzz.addr);
+    var socket = try Socket.init(cfg.addr);
     defer socket.close_blocking();
     try socket.bind();
-    try socket.listen(cfg.Zzz.backlog);
+    try socket.listen(cfg.backlog);
     const EntryParams = struct {
         router: *const Router,
         socket: Socket,
@@ -89,7 +82,7 @@ pub fn host(alloc: std.mem.Allocator) !void {
         EntryParams{ .router = &router, .socket = socket },
         struct {
             fn entry(rt: *Runtime, p: EntryParams) !void {
-                var server = Server.init(cfg.Zzz.init);
+                var server = Server.init(cfg.init);
                 try server.serve(rt, p.router, .{ .normal = p.socket });
             }
         }.entry,

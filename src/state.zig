@@ -18,7 +18,7 @@ fn eventCmp(_: void, a: Event, b: Event) std.math.Order {
 
 const Action = struct {
     id: u16,
-    invoke: fn (Event, Action) void,
+    invoke: *fn (Event, Action) void,
 };
 
 pub const State = struct {
@@ -50,11 +50,12 @@ pub const State = struct {
 
     pub fn step(self: *State, dt: core.Seconds) void {
         self.now += dt;
-        while (self.events.peek()) |evt| : (evt.end < self.now) {
+        while (self.events.peek()) |evt| {
+            if (evt.end < self.now) break;
             _ = self.events.remove();
-            var act = self.actions.get(evt.owner);
+            var act = self.actions.get(evt.owner) orelse continue;
             if (act.id != evt.id) continue;
-            self.actions.remove(evt.owner);
+            _ = self.actions.remove(evt.owner);
             act.invoke(evt, act);
         }
     }
