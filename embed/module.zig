@@ -12,7 +12,7 @@ pub const hosted_files = [_]HostedFile{ .{
     .mime = .JS,
 }, .{
     .path = "/xterm.css",
-    .bytes = @embedFile("vendor/xterm.js"),
+    .bytes = @embedFile("vendor/xterm.css"),
     .mime = .CSS,
 }, .{
     .path = "/main.js",
