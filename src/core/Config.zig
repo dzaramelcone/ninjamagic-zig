@@ -37,14 +37,9 @@ pub const Config = struct {
     };
 
     pub const Zzz: struct {
-        addr: zzz.tardy.Socket.InitKind = .{
-            .tcp = .{
-                .host = "0.0.0.0",
-                .port = 9224,
-            },
-        },
+        host: []const u8 = "0.0.0.0",
+        port: u16 = 9224,
         backlog: u16 = 4_096,
-        init: zzz.HTTP.ServerConfig = .{},
     } = .{};
 
     pub const Combat: struct {

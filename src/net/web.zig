@@ -69,7 +69,12 @@ pub fn host(alloc: std.mem.Allocator) !void {
     var router = try Router.init(alloc, &layers, .{});
     defer router.deinit(alloc);
 
-    var socket = try Socket.init(cfg.addr);
+    var socket = try Socket.init(.{
+        .tcp = .{
+            .host = cfg.host,
+            .port = cfg.port,
+        },
+    });
     defer socket.close_blocking();
     try socket.bind();
     try socket.listen(cfg.backlog);
@@ -82,7 +87,7 @@ pub fn host(alloc: std.mem.Allocator) !void {
         EntryParams{ .router = &router, .socket = socket },
         struct {
             fn entry(rt: *Runtime, p: EntryParams) !void {
-                var server = Server.init(cfg.init);
+                var server = Server.init(.{});
                 try server.serve(rt, p.router, .{ .normal = p.socket });
             }
         }.entry,
