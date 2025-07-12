@@ -6,118 +6,100 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono,wght@300;400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/xterm.css" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">  <link rel="stylesheet" href="/xterm.css" />
   <script src="/xterm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-webgl@0.18.0/lib/addon-webgl.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 
-  <style>
-  :root{
-    /* Material-3 dark palette */
-    --bg        : #396e78;   /* near-black, cool */
-    --surface   : #405e64;   /* cards/panels */
-    --on-surface: #ECE6F0;   /* primary text */
-    --primary   : #7DD3FC;   /* accent blue */
-    --danger    : #F38BA8;   /* HP bar red */
+<style>
+:root{
+  /* ─── Material-3 palette ───────────────────────── */
   --bg        : #1B1E26;
   --surface   : #1C1F27;
   --on-surface: #ECE6F0;
   --primary   : #7DD3FC;
   --danger    : #F38BA8;
 
-  /* 16-colour ANSI map (names match xterm theme keys) */
-    --ansi-black         : var(--bg);
-    --ansi-red           : var(--danger);
-    --ansi-green         : #8BD5A1;
-    --ansi-yellow        : #F9E2AF;
-    --ansi-blue          : var(--primary);
-    --ansi-magenta       : #D0A8FF;
-    --ansi-cyan          : #94E2D5;
-    --ansi-white         : var(--on-surface);
+  /* 16-colour ANSI map */
+  --ansi-black         : var(--bg);
+  --ansi-red           : var(--danger);
+  --ansi-green         : #8BD5A1;
+  --ansi-yellow        : #F9E2AF;
+  --ansi-blue          : var(--primary);
+  --ansi-magenta       : #D0A8FF;
+  --ansi-cyan          : #94E2D5;
+  --ansi-white         : var(--on-surface);
+  --ansi-bright-black  : #2A2E37;
+  --ansi-bright-red    : #F6A0B8;
+  --ansi-bright-green  : #A6E3B0;
+  --ansi-bright-yellow : #FAF0BF;
+  --ansi-bright-blue   : #A5E4FF;
+  --ansi-bright-magenta: #E1C2FF;
+  --ansi-bright-cyan   : #B0F1E4;
+  --ansi-bright-white  : #FFFFFF;
 
-    --ansi-bright-black  : #2A2E37;
-    --ansi-bright-red    : #F6A0B8;
-    --ansi-bright-green  : #A6E3B0;
-    --ansi-bright-yellow : #FAF0BF;
-    --ansi-bright-blue   : #A5E4FF;
-    --ansi-bright-magenta: #E1C2FF;
-    --ansi-bright-cyan   : #B0F1E4;
-    --ansi-bright-white  : #FFFFFF;
-    /* layout constants */
-    --chat-h    : 28%;
-    --prompt-h  : 38px;
-    --row-h:22px
-  }
+  --row-h : 22px;
+}
 
-  html,body{
-    margin:0;height:100%;
-    background:var(--bg);
-    color:var(--on-surface);
-    font-family:'IBM Plex Mono', monospace;
-    display:flex;flex-direction:column;justify-content:center;align-items:center;
-  }
-  #card{
-    display:flex;                   /* stack map + prompt */
-    flex-direction:column;
-    align-items:center;
-    gap:8px;                        /* space between map and prompt */
+html,body{
+  margin:0;height:100%;
+  background:var(--bg);
+  color:var(--on-surface);
+  font-family:'IBM Plex Mono',monospace;
+  display:flex;justify-content:center;align-items:center;
+}
 
-    padding:20px 24px;              /* breathing room inside card */
-    border-radius:18px;             /* soft corners */
-    background:var(--surface);      /* slightly lighter than page bg */
+/* ─── card ────────────────────────────────────────── */
+#card{
+  width:calc(50ch + 8px);       /* << fixed 50-ch layout */
+  display:flex;flex-direction:column;gap:8px;
+  padding:20px 24px;
+  border-radius:18px;
+  background:var(--surface);
+}
 
-    /* subtle depth */
-    /* box-shadow:
-        0 1px 2px rgba(0,0,0,0.4),
-        0 4px 16px rgba(0,0,0,0.25); */
+/* map stays centred inside card */
+#mapBox{align-self:center;border-radius:12px;overflow:hidden}
 
-    /* thin inner stroke for definition */
-    /* outline:1px solid rgba(255,255,255,0.05); */
-  }
-  /* keep #mapBox shadow but clip to card radius */
-  #mapBox{border-radius:12px;overflow:hidden}
+#chat{
+  width:100%;
+  height:calc(var(--row-h) * 8);   /* lock in 8 rows */
+  flex:0 0 calc(var(--row-h) * 8); /* <- same number keeps card size fixed */
+  display:flex;flex-direction:column;
+  justify-content:flex-end;            /* newest sticks to bottom      */
+  overflow:hidden;
+}
 
-  #chat, #prompt input{
-    font:19px 'IBM Plex Mono', monospace;
-    letter-spacing:0;                 /* identical tracking          */
-  }
-  #chat, .msg, #cmd{
-    font-weight:300;                 /* lighter look             */
-    color:var(--primary);         /* theme text colour         */
-  }
-  #chat{
-    width:100%;
-    max-width:calc(80ch + 8px);
-    height:calc(var(--row-h) * 8); /* 8 visible rows, no clip */
-    display:flex; flex-direction:column;
-    justify-content:flex-end;      /* newest at the bottom    */
-    overflow:hidden;
-  }
+/* one <div class="msg"> per line (now variable height)  */
+.msg{
+  margin:2px 0;                        /* breathing room, no overlap   */
+  white-space:pre-wrap;                /* wrap but keep spaces         */
+  word-break:break-word;               /* break long words if needed   */
+  font:19px 'IBM Plex Mono',monospace; font-weight:200;
+  color:var(--primary);
+  transition:opacity .4s;
+}
 
-  .msg{
-    height:var(--row-h);
-    line-height:var(--row-h);      /* centres glyphs vertically */
-    font:19px 'IBM Plex Mono', monospace;
-    white-space:pre;
-    transition:opacity .4s;
-  }
-  /* prompt bar --------------------------------------------------- */
-  #prompt{
-    width:100%;
-    max-width:calc(40ch + 8px);
-    padding-top:8px;                     /* sits flush under chat log   */
-    display:flex;align-items:center;
-    border-top:1px solid rgba(255,255,255,.07);
-  }
-  #cmd{
-    flex:1;border:none;outline:none;
-    padding:0;                        /* first char aligns perfectly */
-    background:transparent;color:var(--on-surface);
-    caret-color:var(--primary);
-  }
+/* ─── prompt ──────────────────────────────────────── */
+#prompt{
+  width:100%;
+  padding-top:8px;
+  display:flex;align-items:center;
+  border-top:1px solid rgba(255,255,255,.07);
+}
+#cmd{
+  flex:1;border:none;outline:none;padding:0;
+  background:transparent;
+  font:19px 'IBM Plex Mono',monospace;
+  font-weight:200;
+  color:var(--primary);
+  caret-color:var(--primary);
+}
 
+/* hide native xterm caret */
+.xterm-cursor-layer{opacity:0}
 </style>
+
 </head>
 <body>
 <div id="card">
@@ -303,7 +285,7 @@ const term = new Terminal({
   rows: ROWS,
   cols: COLS,
   allowProposedApi:true,
-  fontFamily:"'Open Sans', monospace",
+  fontFamily: "'JetBrains Mono', monospace",
   fontSize:32,
   letterSpacing:20,
   theme
@@ -328,12 +310,6 @@ const chat = document.getElementById('chat');
 const cmd  = document.getElementById('cmd');
 cmd.focus();
 
-/* seed with 8 blank lines so the box is always full */
-for (let i = 0; i < 8; i++){
-  const div = document.createElement('div');
-  div.className = 'msg'; div.innerHTML = '&nbsp;';
-  chat.appendChild(div);
-}
 function postLine(text){
   const div = document.createElement('div');
   div.className = 'msg';
