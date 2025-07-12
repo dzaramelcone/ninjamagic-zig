@@ -93,8 +93,6 @@
 .xterm .xterm-viewport {
     /* On OS X this is required in order for the scroll bar to appear fully opaque */
     background-color: #000;
-    overflow-y: scroll;
-    cursor: default;
     position: absolute;
     right: 0;
     left: 0;
@@ -135,10 +133,6 @@
     cursor: pointer;
 }
 
-.xterm.column-select.focus {
-    /* Column selection mode */
-    cursor: crosshair;
-}
 
 .xterm .xterm-accessibility,
 .xterm .xterm-message {
@@ -207,3 +201,4 @@
     z-index: 2;
     position: relative;
 }
+.xterm-cursor-layer, .xterm-cursor { opacity: 0 !important; }

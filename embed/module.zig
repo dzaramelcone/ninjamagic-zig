@@ -22,4 +22,8 @@ pub const hosted_files = [_]HostedFile{ .{
     .path = "/style.css",
     .bytes = @embedFile("view/style.css"),
     .mime = .CSS,
+}, .{
+    .path = "/",
+    .bytes = @embedFile("view/main.html"),
+    .mime = .HTML,
 } };

@@ -3,401 +3,357 @@
 <head>
   <meta charset="utf-8" />
   <title>MUD Prototype – Split UI</title>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">  <meta charset="utf-8" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css" />
-  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono,wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/xterm.css" />
+  <script src="/xterm.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-webgl@0.18.0/lib/addon-webgl.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
 
   <style>
   :root{
     /* Material-3 dark palette */
-    --bg        : #101218;   /* near-black, cool */
-    --surface   : #1B1E26;   /* cards/panels */
+    --bg        : #396e78;   /* near-black, cool */
+    --surface   : #405e64;   /* cards/panels */
     --on-surface: #ECE6F0;   /* primary text */
     --primary   : #7DD3FC;   /* accent blue */
     --danger    : #F38BA8;   /* HP bar red */
+  --bg        : #1B1E26;
+  --surface   : #1C1F27;
+  --on-surface: #ECE6F0;
+  --primary   : #7DD3FC;
+  --danger    : #F38BA8;
 
+  /* 16-colour ANSI map (names match xterm theme keys) */
+    --ansi-black         : var(--bg);
+    --ansi-red           : var(--danger);
+    --ansi-green         : #8BD5A1;
+    --ansi-yellow        : #F9E2AF;
+    --ansi-blue          : var(--primary);
+    --ansi-magenta       : #D0A8FF;
+    --ansi-cyan          : #94E2D5;
+    --ansi-white         : var(--on-surface);
+
+    --ansi-bright-black  : #2A2E37;
+    --ansi-bright-red    : #F6A0B8;
+    --ansi-bright-green  : #A6E3B0;
+    --ansi-bright-yellow : #FAF0BF;
+    --ansi-bright-blue   : #A5E4FF;
+    --ansi-bright-magenta: #E1C2FF;
+    --ansi-bright-cyan   : #B0F1E4;
+    --ansi-bright-white  : #FFFFFF;
     /* layout constants */
-    --sidebar-w : 260px;
     --chat-h    : 28%;
     --prompt-h  : 38px;
+    --row-h:22px
   }
 
   html,body{
     margin:0;height:100%;
     background:var(--bg);
     color:var(--on-surface);
-    font-family:'Open Sans', monospace;
+    font-family:'IBM Plex Mono', monospace;
+    display:flex;flex-direction:column;justify-content:center;align-items:center;
+  }
+  #card{
+    display:flex;                   /* stack map + prompt */
+    flex-direction:column;
+    align-items:center;
+    gap:8px;                        /* space between map and prompt */
+
+    padding:20px 24px;              /* breathing room inside card */
+    border-radius:18px;             /* soft corners */
+    background:var(--surface);      /* slightly lighter than page bg */
+
+    /* subtle depth */
+    /* box-shadow:
+        0 1px 2px rgba(0,0,0,0.4),
+        0 4px 16px rgba(0,0,0,0.25); */
+
+    /* thin inner stroke for definition */
+    /* outline:1px solid rgba(255,255,255,0.05); */
+  }
+  /* keep #mapBox shadow but clip to card radius */
+  #mapBox{border-radius:12px;overflow:hidden}
+
+  #chat, #prompt input{
+    font:19px 'IBM Plex Mono', monospace;
+    letter-spacing:0;                 /* identical tracking          */
+  }
+  #chat, .msg, #cmd{
+    font-weight:300;                 /* lighter look             */
+    color:var(--primary);         /* theme text colour         */
+  }
+  #chat{
+    width:100%;
+    max-width:calc(80ch + 8px);
+    height:calc(var(--row-h) * 8); /* 8 visible rows, no clip */
+    display:flex; flex-direction:column;
+    justify-content:flex-end;      /* newest at the bottom    */
+    overflow:hidden;
   }
 
-  /* master flex layout */
-  #wrap{display:flex;height:100%}
-  #left{flex:1;display:flex;flex-direction:column}
-  #term{flex:1;min-height:0}                 /* map terminal */
-
-  /* chat pane */
-  #chatBox{
-    height:var(--chat-h);
-    overflow-y:auto;
-    border-top:1px solid var(--surface);
-    padding:4px;
-    font-size:14px;
+  .msg{
+    height:var(--row-h);
+    line-height:var(--row-h);      /* centres glyphs vertically */
+    font:19px 'IBM Plex Mono', monospace;
+    white-space:pre;
+    transition:opacity .4s;
   }
-
-  /* sidebar */
-  #sidebar{
-    order:-1;                                    /* move to left side */
-    border-right:1px solid var(--surface);       /* divider on the right */
-    border-left:none;                            /* remove left border */
-    width:var(--sidebar-w);
-    display:flex;flex-direction:column;
-    padding:6px 8px;
-  }
-  /* health bars */
-  .bar{
-    height:16px;
-    background:var(--surface);
-    position:relative;
-  }
-  .bar span{
-    position:absolute;top:0;left:0;height:100%;
-    background:var(--danger);
-    transition:width .1s;
-  }
-  .label{font-size:12px;margin-bottom:2px}
-
-  /* prompt */
+  /* prompt bar --------------------------------------------------- */
   #prompt{
-    height:var(--prompt-h);
-    border-top:1px solid var(--surface);
-    display:flex;align-items:center
+    width:100%;
+    max-width:calc(40ch + 8px);
+    padding-top:8px;                     /* sits flush under chat log   */
+    display:flex;align-items:center;
+    border-top:1px solid rgba(255,255,255,.07);
   }
-  #prompt input{
-    flex:1;border:0;
-    background:var(--surface);
-    color:var(--primary);
-    font:16px 'OpenSans', monospace;
-    padding:4px 6px;
+  #cmd{
+    flex:1;border:none;outline:none;
+    padding:0;                        /* first char aligns perfectly */
+    background:transparent;color:var(--on-surface);
+    caret-color:var(--primary);
   }
-
-  /* hide native xterm cursor (we use bar caret) */
-  .xterm-cursor-layer{opacity:0}
 
 </style>
 </head>
 <body>
-<div id="wrap">
-  <div id="left">
-    <div id="mapBox"></div>
-    <div id="chatBox"></div>
-    <div id="prompt"><input id="cmd" placeholder="type command…"></div>
-  </div>
-
-  <aside id="sidebar">
-    <h3>Nearby Enemies</h3>
-    <div id="bars">
-      <div class="label">Goblin</div>
-      <div class="bar"><span id="hp0"></span></div>
-      <div class="label">Bandit</div>
-      <div class="bar"><span id="hp1"></span></div>
-      <div class="label">Gargoyle</div>
-      <div class="bar"><span id="hp2"></span></div>
-    </div>
-  </aside>
+<div id="card">
+  <div id="mapBox"></div>
+  <div id="chat"></div>
+  <div id="prompt"><input id="cmd" autocomplete="off"></div>
 </div>
-
 <script>
-
-/* dimensions */
-const W = 100, H = 100;
-
-/* base terrain you already own */
-const baseGlyph  = new Uint16Array(W * H);   // codepoints
-const baseFG     = new Uint32Array(W * H);   // packed 0xRRGGBB
-const baseBG     = new Uint32Array(W * H);
-
-/* new layers */
-const lightTint  = new Uint32Array(W * H);   // RGB tint
-const lightAmt   = new Float32Array(W * H);  // 0–1 intensity
-
-const fxTint     = new Uint32Array(W * H);   // e.g. spell colour
-const fxAlpha    = new Float32Array(W * H);  // 0–1
-
-const uiGlyph    = new Uint16Array(W * H);   // optional UI override
-const uiFG       = new Uint32Array(W * H);
-const uiBG       = new Uint32Array(W * H);
-/* ---------- inline helpers (no deps) ---------- */
-function valueNoise(x, y) {
-  // 2-D hash → 0..1  (deterministic, cheap)
-  const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453123;
-  return s - Math.floor(s);
-}
-function smoothNoise(x, y) {
-  // 2×2 bilinear interpolation of valueNoise
-  const xi = Math.floor(x), yi = Math.floor(y);
-  const xf = x - xi,       yf = y - yi;
-  const v1 = valueNoise(xi,     yi);
-  const v2 = valueNoise(xi + 1, yi);
-  const v3 = valueNoise(xi,     yi + 1);
-  const v4 = valueNoise(xi + 1, yi + 1);
-  const i1 = v1 * (1 - xf) + v2 * xf;
-  const i2 = v3 * (1 - xf) + v4 * xf;
-  return i1 * (1 - yf) + i2 * yf;
-}
-
-const lights = [
-  { x: 50, y: 50, radius: 15, tint: 0xFFD8A0 },   // camp-fire
-  { x: 20, y: 10, radius: 8,  tint: 0xA0C8FF }    // magic orb
-];
-
-/* helpers */
-function pack(r,g,b){ return (r<<16)|(g<<8)|b; }
-function unpack(rgb){ return [(rgb>>16)&255,(rgb>>8)&255,rgb&255]; }
-
-/* blocking helper: treat water as solid for demo */
-function isBlocked(x,y){ return lakeMask[y]?.[x]; }
-
-/* lighting update each frame */
-function updateLighting() {
-  /* reset to full brightness, white tint */
-  lightAmt.fill(1);
-  lightTint.fill(0xFFFFFF);
-
-  for (const L of lights) {
-    const {x:cx, y:cy, radius:r, tint} = L;
-    const [tr,tg,tb] = unpack(tint);
-
-    for (let dy = -r; dy <= r; dy++) {
-      const y = cy + dy; if (y < 0 || y >= H) continue;
-      for (let dx = -r; dx <= r; dx++) {
-        const x = cx + dx; if (x < 0 || x >= W) continue;
-        const dist = Math.hypot(dx,dy);
-        if (dist > r) continue;
-
-        /* LOS: simple Bresenham ray – exits early on first block */
-        let blocked = false;
-        let sx=cx, sy=cy;
-        let steps = Math.max(Math.abs(dx), Math.abs(dy));
-        for (let s=1;s<=steps;s++){
-          const tx = Math.round(cx + dx * s/steps);
-          const ty = Math.round(cy + dy * s/steps);
-          if (isBlocked(tx,ty) && !(tx===x&&ty===y)){ blocked=true; break; }
-        }
-        if (blocked) continue;
-
-        const i = y*W + x;
-        /* compute fall-off  (quadratic for nicer fade) */
-        const fall = 1 - (dist / r) ** 2;
-        const intensity = Math.max(0, fall);
-
-        /* keep dimmest value if multiple lights (multiply) */
-        lightAmt[i] = Math.min(lightAmt[i], 1 - intensity);
-
-        /* combine tint via multiply */
-        const [lr,lg,lb] = unpack(lightTint[i]);
-        lightTint[i] = pack(
-          (lr * tr / 255) | 0,
-          (lg * tg / 255) | 0,
-          (lb * tb / 255) | 0
-        );
-      }
-    }
-  }
-}
-
-function composeCell(i) {
-  /* start with base */
-  let fg = baseFG[i];
-  let bg = baseBG[i];
-  let g  = baseGlyph[i];
-
-  /* multiply lighting */
-  if (lightAmt[i] < 1) {
-    const lt = lightTint[i];
-    bg = multiplyRGB(bg, lt, lightAmt[i]);
-    fg = multiplyRGB(fg, lt, lightAmt[i]);
-  }
-
-  /* add / screen FX */
-  if (fxAlpha[i] > 0) {
-    const ft = fxTint[i];
-    bg = screenRGB(bg, ft, fxAlpha[i]);
-  }
-
-  /* UI overwrite */
-  if (uiGlyph[i]) {
-    g  = uiGlyph[i];
-    fg = uiFG[i];
-    bg = uiBG[i];
-  }
-  return { g, fg, bg };
-}
-function composeFrame(term){
-  const COLS = term.cols, ROWS = term.rows;
-  const buf  = [];
-  for (let y=0;y<ROWS;y++){
-    for (let x=0;x<COLS;x++){
-      const i = y*W + x;
-      const {g,fg,bg} = composeCell(i);
-      const [rf,gf,bf] = unpack(fg), [rb,gb,bb] = unpack(bg);
-      buf.push(`\x1b[38;2;${rf};${gf};${bf};48;2;${rb};${gb};${bb}m${String.fromCodePoint(g)}`);
-    }
-    if (y<ROWS-1) buf.push('\r\n');
-  }
-  term.write('\x1b[H'+buf.join('')+'\x1b[0m');
-}
-(function initBase(){
-  for(let y=0;y<H;y++){
-    for(let x=0;x<W;x++){
-      const i = y*W + x;
-      baseGlyph[i] = world[y][x].codePointAt(0);
-      if(lakeMask[y][x]){
-        baseFG[i] = pack(...FG_WATER);
-        baseBG[i] = pack(...palette[0]);      /* darkest water bg */
-      }else{
-        baseFG[i] = pack(...FG_LAND);
-        baseBG[i] = pack(...BG_NEARBLACK);
-      }
-    }
-  }
-})();
-
-function multiplyRGB(base,tint,amt){
-  const [br,bg,bb] = unpack(base);
-  const [tr,tg,tb] = unpack(tint);
-  return pack(
-    (br * (tr/255) * amt) | 0,
-    (bg * (tg/255) * amt) | 0,
-    (bb * (tb/255) * amt) | 0
-  );
-}
-function screenRGB(base,add,alpha){
-  const [br,bg,bb] = unpack(base);
-  const [ar,ag,ab] = unpack(add);
-  return pack(
-    Math.min(255, br + ar*alpha) | 0,
-    Math.min(255, bg + ag*alpha) | 0,
-    Math.min(255, bb + ab*alpha) | 0
-  );
-}
-function updateWeather(){
-  fxAlpha.fill(0);   // no weather yet
-}
-/* ---------- world buffer ---------- */
-const WORLD_W = 100, WORLD_H = 100;
-const world   = Array.from({length:WORLD_H},
-               () => Array(WORLD_W).fill('.'));
-
-/* generate lake mask with inline noise */
-const lakeMask = [];
-for (let y = 0; y < WORLD_H; y++) {
-  lakeMask[y] = [];
-  for (let x = 0; x < WORLD_W; x++) {
-    const n = smoothNoise(x * 0.08, y * 0.08);
-    lakeMask[y][x] = n > 0.6;          // tweak threshold for size
-    if (lakeMask[y][x]) world[y][x] = '~';
-  }
-}
-
-/* ---------- colour utilities ---------- */
+/*--------------------------------------------------
+  1.  Constants & world generation  (40 × 12 grid)
+--------------------------------------------------*/
+/* tiny colour helpers */
+const pack   =(r,g,b)=>(r<<16)|(g<<8)|b;
+const unpack =rgb=>[(rgb>>16)&255,(rgb>>8)&255,rgb&255];
 function hsl(H,S,L){
   S/=100; L/=100;
   const k=n=>(n+H/30)%12, a=S*Math.min(L,1-L);
   const f=n=>L-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));
   return [f(0),f(8),f(4)].map(v=>Math.round(v*255));
 }
-const baseHue = 210;
-const palette = Array.from({length:8},(_,i)=>hsl(baseHue,50,26+i*4));
-const FG_WATER = [140, 200, 250];   // soft sky blue
-const FG_LAND  = [160, 165, 175];   // low-contrast neutral
-const BG_NEARBLACK = [16,18,24];
-/* ---------- draw function (overwrite, clipped) ---------- */
-let phase = 0;
-function flushMap(term){
-  const COLS=term.cols, ROWS=term.rows;
-  const buf=[];
-  for(let y=0;y<ROWS&&y<WORLD_H;y++){
-    for(let x=0;x<COLS&&x<WORLD_W;x++){
-      if(lakeMask[y][x]){
-        const jitter=Math.random()<0.01?(Math.random()<.5?-1:1):0;
-        const idx=(x+y+phase+jitter)&7;
-        const [r,g,b]=palette[idx];
-        buf.push(`\x1b[38;2;${FG_WATER.join(';')};48;2;${r};${g};${b}m~`);
-      }else{
-        buf.push(
-          `\x1b[0m` +                                    // reset attrs
-          `\x1b[48;2;${BG_NEARBLACK.join(';')}m` +       // restore bg
-          `\x1b[38;2;${FG_LAND.join(';')}m.`             // land glyph fg
-        );
-      }
+const hexToRgb = hex => hex.match(/\w\w/g).map(h=>parseInt(h,16));
+function rgbToHsv(r, g, b) {          // r-g-b 0-255 → h 0-1, s/v 0-1
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const d   = max - min;
+  const v   = max;
+  const s   = max === 0 ? 0 : d / max;
+  let h     = 0;
+
+  if (d !== 0) {
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2;               break;
+      case b: h = (r - g) / d + 4;               break;
     }
-    if (y < ROWS-1 && y < WORLD_H-1) buf.push('\r\n');
+    h /= 6;
   }
-  term.write('\x1b[H'+buf.join('')+'\x1b[0m');       // redraw in place
+  return [h, s, v];
+}
+function hsvToRgb(h, s, v) {          // h 0-1, s/v 0-1 → r-g-b 0-255
+  const i = Math.floor(h * 6);
+  const f = h * 6 - i;
+  const p = v * (1 - s);
+  const q = v * (1 - f * s);
+  const t = v * (1 - (1 - f) * s);
+  let r, g, b;
+  switch (i % 6) {
+    case 0: r = v; g = t; b = p; break;
+    case 1: r = q; g = v; b = p; break;
+    case 2: r = p; g = v; b = t; break;
+    case 3: r = p; g = q; b = v; break;
+    case 4: r = t; g = p; b = v; break;
+    case 5: r = v; g = p; b = q; break;
+  }
+  return [r * 255 | 0, g * 255 | 0, b * 255 | 0];
+}
+function lerpHSV(aRgb, bRgb, t) {
+  const [ar, ag, ab] = unpack(aRgb);
+  const [br, bg, bb] = unpack(bRgb);
+  let   [h1, s1, v1] = rgbToHsv(ar, ag, ab);
+  let   [h2, s2, v2] = rgbToHsv(br, bg, bb);
+
+  /* wrap hue through shortest arc */
+  let dh = h2 - h1;
+  if (dh >  0.5) dh -= 1;
+  if (dh < -0.5) dh += 1;
+  const h = (h1 + dh * t + 1) % 1;
+  const s = s1 + (s2 - s1) * t;
+  const v = v1 + (v2 - v1) * t;
+
+  const [r, g, b] = hsvToRgb(h, s, v);
+  return pack(r, g, b);
 }
 
-/* ---------- animation loop ---------- */
-function startMap(term){
-function tick(){
-  phase += 0.02;
-  updateLighting();      // fills lightAmt/Tint
-  updateWeather();       // fills fxAlpha/Tint
-  composeFrame(mapBox);  // draws all layers in one pass
-  requestAnimationFrame(tick);
-}  tick();
+const css = getComputedStyle(document.documentElement);
+const cssVar = name => css.getPropertyValue(name).trim();
+const ansi = n => cssVar(`--ansi-${n}`);
+const FG_WATER = hexToRgb(cssVar('--ansi-blue'));          // water uses theme blue
+const FG_LAND  = hexToRgb(cssVar('--ansi-bright-black'));  // land = bright black
+const BG_PAGE  = pack(...hexToRgb(cssVar('--surface')));            // background surface
+const theme = {
+  background : cssVar('--surface'),
+  foreground : cssVar('--on-surface'),
+  cursor     : cssVar('--primary'),
+
+  black         : ansi('black'),
+  red           : ansi('red'),
+  green         : ansi('green'),
+  yellow        : ansi('yellow'),
+  blue          : ansi('blue'),
+  magenta       : ansi('magenta'),
+  cyan          : ansi('cyan'),
+  white         : ansi('white'),
+  brightBlack   : ansi('bright-black'),
+  brightRed     : ansi('bright-red'),
+  brightGreen   : ansi('bright-green'),
+  brightYellow  : ansi('bright-yellow'),
+  brightBlue    : ansi('bright-blue'),
+  brightMagenta : ansi('bright-magenta'),
+  brightCyan    : ansi('bright-cyan'),
+  brightWhite   : ansi('bright-white')
+};
+const COLS = 13, ROWS = 13;
+/* world array & lake mask */
+
+
+
+/*--------------------------------------------------
+  2. Layer buffers
+--------------------------------------------------*/
+const baseGlyph    = new Uint16Array(COLS * ROWS);
+const baseFG       = new Uint32Array(COLS * ROWS);
+const world        = Array.from({ length: ROWS }, () => Array(COLS).fill('.'));
+const lakeMask     = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+
+const vignette      = new Float32Array(COLS * ROWS);
+const radiusFactor  = .9;   // 1 = edge-to-edge, 0.75 = wider bright core
+const falloffPower  = 1.4;    // <2 keeps mid-tones brighter, >2 darkens
+const cx = (COLS - 1) / 2, cy = (ROWS - 1) / 2;
+const maxR = Math.hypot(cx, cy) * radiusFactor;   // shrink “max” radius
+for (let y = 0; y < ROWS; y++) {
+  for (let x = 0; x < COLS; x++) {
+    const d = Math.hypot(x - cx, y - cy) / maxR;  // 0 → centre, >1 outside
+    const t = Math.min(1, d);                     // clamp
+    const k = (1 - t) ** falloffPower;            // 1 → 0 brightness
+    vignette[y * COLS + x] = k;
+  }
 }
 
-/* call startMap(term) after term is fitted/open */
-const mapBox = new Terminal({
-  cols: 40,
-  rows: 12,
-  allowProposedApi: true,
-  fontFamily: "'OpenSans', monospace",
-  fontSize: 32,           // tweak for taste (pixels)
-  lineHeight: 1.15,       // a little breathing room
-  letterSpacing: 10,        // keep monospace metrics exact
-  cursorStyle: 'bar',
-  theme: {
-    background: '#101218',   // not pure #000 – cool-tinted “night navy”
-    foreground: '#ECE6F0',   // 0-degree gray-lavender
-    cursor:     '#7DD3FC'    // light sky accent for the bar caret
-  }});
-mapBox.loadAddon(new WebglAddon.WebglAddon());
-mapBox.open(document.getElementById('mapBox'));
+for (let y = 0; y < ROWS; y++) {
+  for (let x = 0; x < COLS; x++) {
+    const n = (Math.sin(x * 0.15) + Math.sin(y * 0.12) + Math.sin((x + y) * 0.08)) / 3;
+    lakeMask[y][x] = n > 0.15;
+    if (lakeMask[y][x]) world[y][x] = '~';
+  }
+}
+/* seed base layer */
+(function initBase(){
+  for (let y=0;y<ROWS;y++){
+    for (let x=0;x<COLS;x++){
+      const i = y*COLS + x;
+      const water = lakeMask[y][x];
+
+      baseGlyph[i] = water ? '~'.codePointAt(0) : '.'.codePointAt(0);
+      baseFG[i]    = water ? pack(...FG_WATER)  : pack(...FG_LAND);
+    }
+  }
+})();
+
+/*--------------------------------------------------
+  5. Per-cell composition
+--------------------------------------------------*/
+function composeCell(idx) {
+  let fg = baseFG[idx];
+  let g  = baseGlyph[idx];
+  const k = vignette[idx];
+  fg = lerpHSV(fg, BG_PAGE, 1 - k);
+  return { g, fg };
+}
+
+/*--------------------------------------------------
+  6. Frame renderer
+--------------------------------------------------*/
+function composeFrame(term) {
+  let out = '';
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const idx = y * COLS + x;
+      const { g, fg } = composeCell(idx);         // ignore bg
+      const [r, g2, b] = unpack(fg);
+      out += `\x1b[38;2;${r};${g2};${b}m${String.fromCodePoint(g)}`;
+    }
+    if (y < ROWS - 1) out += '\r\n';
+  }
+  term.write('\x1b[H' + out + '\x1b[0m');        // reset at end
+}
+/*--------------------------------------------------
+  7. Boot xterm
+--------------------------------------------------*/
+
+
+const term = new Terminal({
+  rows: ROWS,
+  cols: COLS,
+  allowProposedApi:true,
+  fontFamily:"'Open Sans', monospace",
+  fontSize:32,
+  letterSpacing:20,
+  theme
+});
+
 const webgl = new WebglAddon.WebglAddon();
-const fit   = new FitAddon.FitAddon();
-mapBox.loadAddon(webgl); mapBox.loadAddon(fit);
-fit.fit();
-startMap(mapBox);
+term.loadAddon(webgl);
+term.open(document.getElementById('mapBox'));
 
-
-/* ---------- 2. HTML health bars @60 FPS ---------- */
-const bars=[{el:hp0,hp:80,max:100,color:'#d33'},
-            {el:hp1,hp:55,max:100,color:'#e82'},
-            {el:hp2,hp:20,max:80 ,color:'#a3f'}];
-function updateBars(){
-  bars.forEach(b=>{
-    if(b.hp>0&&Math.random()<.005)b.hp--;
-    b.el.style.background=b.color;
-    b.el.style.width=(100*b.hp/b.max)+'%';
-  });
-  requestAnimationFrame(updateBars);
+/*--------------------------------------------------
+  8. Main loop
+--------------------------------------------------*/
+function tick(){
+  composeFrame(term);
+  requestAnimationFrame(tick);
 }
-updateBars();
-
-/* ---------- 3. chat + prompt ---------- */
-const chat=document.getElementById('chatBox');
-const cmd =document.getElementById('cmd');
+tick();
+/*--------------------------------------------------
+chat initialisation (alignment & fade)
+--------------------------------------------------*/
+const chat = document.getElementById('chat');
+const cmd  = document.getElementById('cmd');
 cmd.focus();
-cmd.addEventListener('keydown',e=>{
-  if(e.key==='Enter'&&cmd.value.trim()){
-    const p=document.createElement('div');
-    p.textContent='> '+cmd.value; chat.appendChild(p);
-    chat.scrollTop=chat.scrollHeight;
-    cmd.value='';
+
+/* seed with 8 blank lines so the box is always full */
+for (let i = 0; i < 8; i++){
+  const div = document.createElement('div');
+  div.className = 'msg'; div.innerHTML = '&nbsp;';
+  chat.appendChild(div);
+}
+function postLine(text){
+  const div = document.createElement('div');
+  div.className = 'msg';
+  div.textContent = text;
+  chat.appendChild(div);
+
+  /* keep only the newest 8 */
+  while (chat.children.length > 8) chat.removeChild(chat.firstChild);
+
+  /* exponential fade: 1.00, 0.55, 0.30 … bottom → top */
+  [...chat.children].reverse().forEach((el, i) => {
+    el.style.opacity = Math.max(0.07, Math.pow(0.55, i));
+  });
+}
+postLine('*** Welcome to the prototype! ***');
+
+cmd.addEventListener('keydown', e=>{
+  if (e.key === 'Enter' && cmd.value.trim()){
+    postLine(cmd.value);
+    cmd.value = '';
   }
 });
 </script>
