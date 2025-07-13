@@ -50,18 +50,26 @@ html,body{
 }
 
 /* ─── card ────────────────────────────────────────── */
-#card{
-  width:calc(50ch + 8px);       /* << fixed 50-ch layout */
-  display:flex;flex-direction:column;gap:8px;
-  padding:20px 24px;
-  border-radius:18px;
-  background:var(--surface);
+#card {
+  position: relative;
+  width: calc(50ch + 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 24px;
+  background: var(--surface);
+  border-radius: 18px;
+  overflow: hidden;
 }
 
-/* map stays centred inside card */
-#mapBox{align-self:center;border-radius:12px;overflow:hidden}
+#mapBox{
+  align-self:center;
+  border-radius:12px;
+  overflow:hidden;
+  z-index: 0;
+}
 
-#chat{
+#chat {
   width:100%;
   height:calc(var(--row-h) * 8);   /* lock in 8 rows */
   flex:0 0 calc(var(--row-h) * 8); /* <- same number keeps card size fixed */
@@ -75,7 +83,8 @@ html,body{
   margin:2px 0;                        /* breathing room, no overlap   */
   white-space:pre-wrap;                /* wrap but keep spaces         */
   word-break:break-word;               /* break long words if needed   */
-  font:19px 'IBM Plex Mono',monospace; font-weight:200;
+  font:19px 'IBM Plex Mono', monospace;
+  font-weight:300;
   color:var(--primary);
   transition:opacity .4s;
 }
@@ -91,7 +100,7 @@ html,body{
   flex:1;border:none;outline:none;padding:0;
   background:transparent;
   font:19px 'IBM Plex Mono',monospace;
-  font-weight:200;
+  font-weight:300;
   color:var(--primary);
   caret-color:var(--primary);
 }
@@ -104,7 +113,7 @@ html,body{
 <body>
 <div id="card">
   <div id="mapBox"></div>
-  <div id="chat"></div>
+    <div id="chat"></div>
   <div id="prompt"><input id="cmd" autocomplete="off"></div>
 </div>
 <script>
@@ -114,14 +123,13 @@ html,body{
 /* tiny colour helpers */
 const pack   =(r,g,b)=>(r<<16)|(g<<8)|b;
 const unpack =rgb=>[(rgb>>16)&255,(rgb>>8)&255,rgb&255];
-function hsl(H,S,L){
-  S/=100; L/=100;
-  const k=n=>(n+H/30)%12, a=S*Math.min(L,1-L);
-  const f=n=>L-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));
-  return [f(0),f(8),f(4)].map(v=>Math.round(v*255));
+const hex2int = hex => pack(...hex2rgb(hex));
+function int2hex(rgbInt) {
+  const [r, g, b] = unpack(rgbInt);
+  return `#${[r, g, b].map(v => v.toString(16).padStart(2, '0')).join('')}`;
 }
-const hexToRgb = hex => hex.match(/\w\w/g).map(h=>parseInt(h,16));
-function rgbToHsv(r, g, b) {          // r-g-b 0-255 → h 0-1, s/v 0-1
+const hex2rgb = hex => hex.match(/\w\w/g).map(h=>parseInt(h,16));
+function rgb2hsv(r, g, b) {          // r-g-b 0-255 → h 0-1, s/v 0-1
   r /= 255; g /= 255; b /= 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
   const d   = max - min;
@@ -139,7 +147,7 @@ function rgbToHsv(r, g, b) {          // r-g-b 0-255 → h 0-1, s/v 0-1
   }
   return [h, s, v];
 }
-function hsvToRgb(h, s, v) {          // h 0-1, s/v 0-1 → r-g-b 0-255
+function hsv2rgb(h, s, v) {          // h 0-1, s/v 0-1 → r-g-b 0-255
   const i = Math.floor(h * 6);
   const f = h * 6 - i;
   const p = v * (1 - s);
@@ -159,8 +167,8 @@ function hsvToRgb(h, s, v) {          // h 0-1, s/v 0-1 → r-g-b 0-255
 function lerpHSV(aRgb, bRgb, t) {
   const [ar, ag, ab] = unpack(aRgb);
   const [br, bg, bb] = unpack(bRgb);
-  let   [h1, s1, v1] = rgbToHsv(ar, ag, ab);
-  let   [h2, s2, v2] = rgbToHsv(br, bg, bb);
+  let   [h1, s1, v1] = rgb2hsv(ar, ag, ab);
+  let   [h2, s2, v2] = rgb2hsv(br, bg, bb);
 
   /* wrap hue through shortest arc */
   let dh = h2 - h1;
@@ -170,16 +178,16 @@ function lerpHSV(aRgb, bRgb, t) {
   const s = s1 + (s2 - s1) * t;
   const v = v1 + (v2 - v1) * t;
 
-  const [r, g, b] = hsvToRgb(h, s, v);
+  const [r, g, b] = hsv2rgb(h, s, v);
   return pack(r, g, b);
 }
 
 const css = getComputedStyle(document.documentElement);
 const cssVar = name => css.getPropertyValue(name).trim();
 const ansi = n => cssVar(`--ansi-${n}`);
-const FG_WATER = hexToRgb(cssVar('--ansi-blue'));          // water uses theme blue
-const FG_LAND  = hexToRgb(cssVar('--ansi-bright-black'));  // land = bright black
-const BG_PAGE  = pack(...hexToRgb(cssVar('--surface')));            // background surface
+const FG_WATER = hex2rgb(cssVar('--ansi-blue'));          // water uses theme blue
+const FG_LAND  = hex2rgb(cssVar('--ansi-bright-black'));  // land = bright black
+const BG_PAGE  = pack(...hex2rgb(cssVar('--surface')));            // background surface
 const theme = {
   background : cssVar('--surface'),
   foreground : cssVar('--on-surface'),
@@ -233,7 +241,7 @@ for (let y = 0; y < ROWS; y++) {
   for (let x = 0; x < COLS; x++) {
     const n = (Math.sin(x * 0.15) + Math.sin(y * 0.12) + Math.sin((x + y) * 0.08)) / 3;
     lakeMask[y][x] = n > 0.15;
-    if (lakeMask[y][x]) world[y][x] = '~';
+    if (lakeMask[y][x]) world[y][x] = 'ᖗ';
   }
 }
 /* seed base layer */
@@ -243,12 +251,31 @@ for (let y = 0; y < ROWS; y++) {
       const i = y*COLS + x;
       const water = lakeMask[y][x];
 
-      baseGlyph[i] = water ? '~'.codePointAt(0) : '.'.codePointAt(0);
+      baseGlyph[i] = water ? 'ᖗ'.codePointAt(0) : '.'.codePointAt(0);
       baseFG[i]    = water ? pack(...FG_WATER)  : pack(...FG_LAND);
     }
   }
 })();
-
+const keyframes = [
+  { t: 0.00, pal: { bg:'#1B1E26', surface:'#1C1F27', primary:'#7DD3FC', onSurface:'#ECE6F0' }}, // true midnight
+  { t: 0.50, pal: { bg:'#2A2E37', surface:'#333745', primary:'#7DD3FC', onSurface:'#ECE6F0' }}, // your “dimly-lit” look
+  { t: 1.00, pal: { bg:'#1B1E26', surface:'#1C1F27', primary:'#7DD3FC', onSurface:'#ECE6F0' }}  // back to midnight
+];
+function paletteAt(t) {
+  for (let i = 1; i < keyframes.length; i++) {
+    if (t <= keyframes[i].t) {
+      const a = keyframes[i - 1], b = keyframes[i];
+      const span = (t - a.t) / (b.t - a.t);
+      const hex2int = hex => pack(...hex2rgb(hex));
+      return {
+        bg:        lerpHSV(hex2int(a.pal.bg),       hex2int(b.pal.bg),      span),
+        surface:   lerpHSV(hex2int(a.pal.surface),  hex2int(b.pal.surface), span),
+        primary:   lerpHSV(hex2int(a.pal.primary),  hex2int(b.pal.primary), span),
+        onSurface: lerpHSV(hex2int(a.pal.onSurface),hex2int(b.pal.onSurface),span)
+      };
+    }
+  }
+}
 /*--------------------------------------------------
   5. Per-cell composition
 --------------------------------------------------*/
@@ -298,7 +325,14 @@ term.open(document.getElementById('mapBox'));
 /*--------------------------------------------------
   8. Main loop
 --------------------------------------------------*/
+const CYCLE_MS = 30_000;
 function tick(){
+  const t = (performance.now() % CYCLE_MS) / CYCLE_MS;
+  const { bg, surface, onSurface, primary } = paletteAt(t);
+  document.documentElement.style.setProperty('--bg',         int2hex(bg));
+  document.documentElement.style.setProperty('--surface',    int2hex(surface));
+  document.documentElement.style.setProperty('--on-surface', int2hex(onSurface));
+  document.documentElement.style.setProperty('--primary',    int2hex(primary));
   composeFrame(term);
   requestAnimationFrame(tick);
 }
