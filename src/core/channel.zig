@@ -7,16 +7,16 @@ pub fn Channel(comptime T: type, N: usize) type {
         write_idx: [2]std.atomic.Value(usize) = .{ .{ .raw = 0 }, .{ .raw = 0 } },
 
         pub fn push(self: *@This(), item: T) bool {
-            const w = self.active_write.load(.acquire);
-            const idx = self.write_idx[w].fetchAdd(1, .monotonic);
+            const w = self.active_write.load(.seq_cst);
+            const idx = self.write_idx[w].fetchAdd(1, .seq_cst);
             if (idx >= N) return false;
             self.rings[w][idx] = item;
             return true;
         }
 
         pub fn flip(self: *@This()) []const T {
-            const old = self.active_write.fetchXor(1, .acq_rel);
-            const count = self.write_idx[old].swap(0, .acquire);
+            const old = self.active_write.fetchXor(1, .seq_cst);
+            const count = self.write_idx[old].swap(0, .seq_cst);
             return self.rings[old][0..@min(count, N)];
         }
     };
@@ -51,8 +51,7 @@ fn producer(
 ) void {
     const base = id << 24;
     for (0..pushes) |n| {
-        while (!chan.push(base | n)) std.Thread.sleep(16_000_000);
-        std.Thread.sleep(2_000_000);
+        while (!chan.push(base | n)) std.Thread.sleep(id + 17);
     }
     _ = left.fetchSub(1, .acq_rel); // signal done
 }
@@ -74,11 +73,15 @@ test "soak 2k producers + concurrent consumer" {
     defer seen.deinit();
 
     while (writers_left.load(.acquire) != 0) {
-        for (chan.flip()) |val| try seen.putNoClobber(val, {});
-        std.Thread.sleep(16_000_000);
+        for (chan.flip()) |val| {
+            const res = try seen.getOrPut(val);
+            if (res.found_existing) {
+                std.debug.print("dup {d} first_seen_at={}!\n", .{ val, res.value_ptr.* });
+            }
+        }
+        std.Thread.sleep(2000);
     }
     for (threads) |t| t.join();
-    for (chan.flip()) |val| try seen.putNoClobber(val, {});
 
     try std.testing.expectEqual(producers * pushes, seen.count());
 }
