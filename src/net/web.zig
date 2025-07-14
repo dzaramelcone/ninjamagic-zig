@@ -56,11 +56,11 @@ fn serveStatic(comptime entry: embed.HostedFile) *const fn (*const Context, void
 }
 
 const layers: [5]Layer = .{
-    Route.init("/").get({}, baseHandler).layer(),
     Route.init(embed.hosted_files[0].path).get({}, serveStatic(embed.hosted_files[0])).layer(),
     Route.init(embed.hosted_files[1].path).get({}, serveStatic(embed.hosted_files[1])).layer(),
     Route.init(embed.hosted_files[2].path).get({}, serveStatic(embed.hosted_files[2])).layer(),
     Route.init(embed.hosted_files[3].path).get({}, serveStatic(embed.hosted_files[3])).layer(),
+    Route.init(embed.hosted_files[4].path).get({}, serveStatic(embed.hosted_files[4])).layer(),
 };
 
 pub fn host(alloc: std.mem.Allocator) !void {
