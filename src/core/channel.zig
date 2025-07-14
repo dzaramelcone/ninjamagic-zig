@@ -79,9 +79,15 @@ test "soak 2k producers + concurrent consumer" {
                 std.debug.print("dup {d} first_seen_at={}!\n", .{ val, res.value_ptr.* });
             }
         }
-        std.Thread.sleep(2000);
+        std.Thread.sleep(16_000_000);
     }
     for (threads) |t| t.join();
+    for (chan.flip()) |val| {
+        const res = try seen.getOrPut(val);
+        if (res.found_existing) {
+            std.debug.print("dup {d} first_seen_at={}!\n", .{ val, res.value_ptr.* });
+        }
+    }
 
     try std.testing.expectEqual(producers * pushes, seen.count());
 }
