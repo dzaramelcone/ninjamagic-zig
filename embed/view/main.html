@@ -379,8 +379,8 @@ postLine('*** Welcome to the prototype! ***');
 cmd.addEventListener('keydown', e=>{
   if (e.key === 'Enter' && cmd.value.trim()){
     postLine(cmd.value);
-    cmd.value = '';
     ws.send(cmd.value);
+    cmd.value = '';
   }
 });
 
