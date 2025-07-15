@@ -85,12 +85,12 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
 
     const core_tests = b.addTest(.{ .root_module = core });
-    const cmd_tests = b.addTest(.{ .root_source_file = b.path("src/cmd.zig") });
-    cmd_tests.root_module.addImport("core", core);
+    const prs_tests = b.addTest(.{ .root_source_file = b.path("src/parse.zig") });
+    prs_tests.root_module.addImport("core", core);
     const run_core_tests = b.addRunArtifact(core_tests);
-    const run_cmd_tests = b.addRunArtifact(cmd_tests);
+    const run_prs_tests = b.addRunArtifact(prs_tests);
 
     test_step.dependOn(&run_exe_unit_tests.step);
     test_step.dependOn(&run_core_tests.step);
-    test_step.dependOn(&run_cmd_tests.step);
+    test_step.dependOn(&run_prs_tests.step);
 }

@@ -1,28 +1,36 @@
 const std = @import("std");
 const ws = @import("websocket");
 const cfg = @import("core").Config;
+var next_id: std.atomic.Value(usize) = .{ .raw = 1 };
 
-const App = struct {};
+pub const Deps = struct {
+    alloc: std.mem.Allocator,
+    pushInbound: *const fn (usize, []u8) void,
+    registerClient: *const fn (usize, *ws.Conn) void,
+    unregister: *const fn (usize) void,
+};
+
 const WsHandler = struct {
-    app: *App,
+    deps: *Deps,
     conn: *ws.Conn,
-    pub fn init(_: *const ws.Handshake, conn: *ws.Conn, app: *App) !WsHandler {
-        return .{
-            .app = app,
-            .conn = conn,
-        };
+    user: usize,
+    pub fn init(_: *const ws.Handshake, conn: *ws.Conn, deps: *Deps) !WsHandler {
+        const id = next_id.fetchAdd(1, .monotonic);
+        deps.registerClient(id, conn);
+        return .{ .deps = deps, .conn = conn, .user = id };
     }
-
-    pub fn clientMessage(self: *WsHandler, data: []const u8) !void {
-        try self.conn.write(data); // echo the message back
+    pub fn deinit(self: *WsHandler) void {
+        self.deps.unregister(self.user);
+    }
+    pub fn clientMessage(self: *WsHandler, raw: []const u8) !void {
+        const buf = try self.deps.alloc.dupe(u8, raw);
+        self.deps.pushInbound(self.user, buf);
+        try self.conn.write(raw);
     }
 };
 
-pub fn host(alloc: std.mem.Allocator) !void {
-    // start the ws_server. TODO: move this into tardy if possible
-    var ws_server = try ws.Server(WsHandler).init(alloc, cfg.Ws);
+pub fn host(deps: *Deps) !void {
+    var ws_server = try ws.Server(WsHandler).init(deps.alloc, cfg.Ws);
     defer ws_server.deinit();
-
-    var app = App{};
-    try ws_server.listen(&app);
+    try ws_server.listen(deps);
 }

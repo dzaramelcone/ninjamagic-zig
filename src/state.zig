@@ -3,11 +3,14 @@ const core = @import("core");
 const cfg = core.Config.Combat;
 const log = std.debug.print;
 
-const Owner = u16;
-var eventCount: u16 = 0;
+const ws = @import("websocket");
+const parser = @import("parse.zig");
+const Channel = core.Channel(core.Command, std.math.pow(usize, 2, 10));
+
+var counter: usize = 0;
 const Event = struct {
-    id: u16,
-    owner: Owner,
+    id: usize,
+    owner: usize,
     start: core.Seconds,
     end: core.Seconds,
 };
@@ -17,26 +20,33 @@ fn eventCmp(_: void, a: Event, b: Event) std.math.Order {
 }
 
 const Action = struct {
-    id: u16,
-    invoke: *fn (Event, Action) void,
+    id: usize,
+    callback: *fn (Event, Action) void,
 };
 
 pub const State = struct {
     alloc: std.mem.Allocator,
+
     positions: std.ArrayList(core.Point),
-    actions: std.AutoHashMap(Owner, Action),
+    actions: std.AutoHashMap(usize, Action),
     events: std.PriorityQueue(Event, void, eventCmp),
     now: core.Seconds,
+
+    conns: std.AutoHashMap(usize, *ws.Conn),
+    channel: Channel,
 
     pub fn init(alloc: std.mem.Allocator) !*State {
         const self = try alloc.create(State);
         self.* = .{
             .alloc = alloc,
-            .positions = std.ArrayList(core.Point).init(alloc),
 
-            .actions = std.AutoHashMap(Owner, Action).init(alloc),
+            .positions = std.ArrayList(core.Point).init(alloc),
+            .actions = std.AutoHashMap(usize, Action).init(alloc),
             .events = std.PriorityQueue(Event, void, eventCmp).init(alloc, undefined),
             .now = 0,
+
+            .conns = std.AutoHashMap(usize, *ws.Conn).init(alloc),
+            .channel = Channel{},
         };
         return self;
     }
@@ -45,30 +55,69 @@ pub const State = struct {
         self.positions.deinit();
         self.actions.deinit();
         self.events.deinit();
+        self.conns.deinit();
         self.alloc.destroy(self);
+    }
+
+    pub fn onPacket(self: *State, id: usize, txt: []u8) void {
+        _ = self.channel.push(.{ .user = id, .text = txt });
+    }
+    pub fn onConnect(self: *State, id: usize, c: *ws.Conn) void {
+        self.conns.put(id, c) catch |err| {
+            switch (err) {
+                error.OutOfMemory => {
+                    std.log.err("OOM while trac king client {}", .{id});
+                    _ = c.close(.{ .code = 1013 }) catch {};
+                },
+                else => unreachable,
+            }
+        };
+    }
+    pub fn onClose(self: *State, id: usize) void {
+        _ = self.conns.remove(id);
     }
 
     pub fn step(self: *State, dt: core.Seconds) void {
         self.now += dt;
+        // Pull messages off the queue.
+        for (self.channel.flip()) |msg| {
+            defer self.alloc.free(msg.text);
+            self.broadcast(msg.text) catch |e| std.log.err("send {s}", .{e});
+            // TODO: parse
+            // cmd.parse(msg);
+        }
+        // Handle events.
         while (self.events.peek()) |evt| {
             if (evt.end < self.now) break;
             _ = self.events.remove();
             var act = self.actions.get(evt.owner) orelse continue;
             if (act.id != evt.id) continue;
             _ = self.actions.remove(evt.owner);
-            act.invoke(evt, act);
+            act.callback(evt, act);
         }
     }
 
-    pub fn startAction(self: *State, actor: Owner, act: Action, dur: core.Seconds) !void {
+    pub fn startAction(self: *State, actor: usize, act: Action, dur: core.Seconds) !void {
         const evt = Event{
-            .id = eventCount,
+            .id = counter,
             .owner = actor,
             .start = self.now,
             .end = self.now + dur,
         };
-        eventCount += 1;
+        counter += 1;
         try self.events.add(evt);
         try self.actions.put(actor, act);
+    }
+    pub fn registerClient(self: *State, id: usize, c: *ws.Conn) !void {
+        try self.conns.put(id, c);
+    }
+    pub fn unregisterClient(self: *State, id: usize) void {
+        _ = self.conns.remove(id);
+    }
+    pub fn broadcast(self: *State, text: []const u8) !void {
+        var it = self.conns.iterator();
+        while (it.next()) |kv| {
+            _ = kv.value_ptr.*.write(text) catch {};
+        }
     }
 };

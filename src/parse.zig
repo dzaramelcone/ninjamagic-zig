@@ -1,13 +1,16 @@
 const std = @import("std");
 const core = @import("core");
+const Command = core.Command;
 const State = @import("state.zig").State;
 
-pub fn parse(input: []const u8) !void {
+pub fn parse(cmd: Command) !void {
+    const input = cmd.text;
     if (input.len > 0 and input[0] == '\'') {
         try Say.gather(input);
         try Say.run(input);
         return;
     }
+
     var tokens = std.mem.tokenizeScalar(u8, input, ' ');
     const word = tokens.next() orelse return error.NothingSent;
     inline for (cmds) |C| if (matches(C, word)) {
@@ -117,17 +120,17 @@ const raises = std.testing.expectError;
 test "parser – basic verbs and error cases" {
 
     // 1.  Empty input  →  NothingSent
-    try raises(error.NothingSent, parse(""));
-    try raises(error.UnknownVerb, parse("foobar"));
+    try raises(error.NothingSent, parse(.{ .user = 0, .text = "" }));
+    try raises(error.UnknownVerb, parse(.{ .user = 0, .text = "foobar" }));
 
-    try raises(error.NotYetImplemented, parse("'blah"));
+    try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "'blah" }));
 
-    try raises(error.NotYetImplemented, parse("a"));
-    try raises(error.NotYetImplemented, parse("attack Bob"));
-    try raises(error.NotYetImplemented, parse("AtTaCk alice"));
+    try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "a" }));
+    try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "attack Bob" }));
+    try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "AtTaCk alice" }));
 
-    try raises(error.NotYetImplemented, parse("north"));
-    try raises(error.NotYetImplemented, parse("ne")); // maps to northeast
-    try raises(error.NotYetImplemented, parse("nw")); // northwest
+    try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "north" }));
+    try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "ne" })); // maps to northeast
+    try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "nw" })); // northwest
 
 }
