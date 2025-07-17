@@ -5,7 +5,7 @@ const State = @import("state.zig").State;
 const cfg = @import("core").Config;
 var state: *State = undefined;
 
-const Dep = struct {
+const EncloseState = struct {
     pub fn onPacket(id: usize, txt: []u8) void {
         state.onPacket(id, txt);
     }
@@ -30,9 +30,9 @@ pub fn main() !void {
     defer state.deinit();
     var deps = net.Deps{
         .alloc = alloc,
-        .pushInbound = Dep.onPacket,
-        .registerClient = Dep.onConnect,
-        .unregister = Dep.onClose,
+        .pushInbound = EncloseState.onPacket,
+        .registerClient = EncloseState.onConnect,
+        .unregister = EncloseState.onClose,
     };
     var ws = try std.Thread.spawn(.{}, net.host_ws, .{&deps});
     defer ws.join();

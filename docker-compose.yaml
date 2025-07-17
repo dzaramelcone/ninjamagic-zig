@@ -22,6 +22,7 @@ services:
       retries: 5
 
   app:
+    container_name: app
     build: 
       context: .
       target: runtime
@@ -46,3 +47,12 @@ services:
     network_mode: host
     privileged: true
     profiles: ["slow"]
+
+
+  test:
+    build:
+      context: .
+      target: pytest
+    profiles: ["test"]
+    # depends_on: ["app"]
+    command: python -m pytest

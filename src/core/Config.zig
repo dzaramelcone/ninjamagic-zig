@@ -28,7 +28,7 @@ pub const Config = struct {
 
     pub const Ws: websocket.server.Config = .{
         .address = "0.0.0.0",
-        .port = 9224,
+        .port = 9862,
         .handshake = .{
             .timeout = 3,
             .max_size = 1024,
