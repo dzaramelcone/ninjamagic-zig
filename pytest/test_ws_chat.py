@@ -1,46 +1,36 @@
-import asyncio,socket
+from uuid import uuid4
 import pytest
+from conftest import WS_URL
 import websockets
 
-from conftest import WS_HOST, WS_PORT, WS_URL
-
-
-async def _wait_for_port(host, port, timeout=1.0):
-    deadline = asyncio.get_event_loop().time() + timeout
-    while True:
-        try:
-            with socket.create_connection((host, port), timeout=1):
-                return
-        except OSError:
-            if asyncio.get_event_loop().time() > deadline:
-                raise RuntimeError(f"Server not up on {host}:{port} after {timeout}s")
-            await asyncio.sleep(0.05)
+@pytest.mark.asyncio
+async def test_client_has_good_ping() -> None:
+    alice = await websockets.connect(WS_URL)
+    assert await alice.ping()
 
 
 @pytest.mark.asyncio
-async def test_clients_get_own_echo() -> None:
-    await _wait_for_port(WS_HOST, WS_PORT)
+async def test_chat():
+    alice, bob = await websockets.connect(WS_URL), await websockets.connect(WS_URL)
+    await alice.send("hello-from-alice")
+    assert await alice.recv() == "hello-from-alice"
+    assert await alice.recv() == "hello-from-alice"
+    assert await bob.recv() == "hello-from-alice"
+    
+    await bob.send("hello-from-bob")
+    assert await alice.recv() == "hello-from-bob"
+    assert await bob.recv() == "hello-from-bob"
+    assert await bob.recv() == "hello-from-bob"
+    await alice.close()
+    await bob.close()
 
-    async with (
-        websockets.connect(WS_URL) as alice,
-    ):
-        await alice.send("hi-bob")
-        msg_a = await asyncio.wait_for(alice.recv(), timeout=1)
-        assert msg_a == "hi-bob"
-
-
-@pytest.mark.asyncio
-async def test_two_clients_can_chat(server_ready):
-    async with websockets.connect(WS_URL) as alice, websockets.connect(WS_URL) as bob:
-        await alice.send("hello-from-alice")
-
-        bob_hears = await asyncio.wait_for(bob.recv(), timeout=1)
-        assert bob_hears == "hello-from-alice"
-
-        await bob.send("hello-from-bob")
-
-        alice_hears = await asyncio.wait_for(alice.recv(), timeout=1)
-        assert alice_hears == "hello-from-bob"
+# @pytest.mark.asyncio
+# @pytest.mark.parametrize("ws_clients", [2], indirect=True)
+# async def test_chat(ws_clients):
+#     alice, bob = ws_clients
+#     await send_and_broadcast(alice, "hello-from-alice")
+#     heard = await asyncio.wait_for(bob.recv(), 1)
+#     assert heard == "hello-from-alice"
 
 
 # @pytest.mark.asyncio
