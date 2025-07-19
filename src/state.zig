@@ -59,30 +59,11 @@ pub const State = struct {
         self.alloc.destroy(self);
     }
 
-    pub fn onPacket(self: *State, id: usize, txt: []u8) void {
-        _ = self.channel.push(.{ .user = id, .text = txt });
-    }
-    pub fn onConnect(self: *State, id: usize, c: *ws.Conn) void {
-        self.conns.put(id, c) catch |err| {
-            switch (err) {
-                error.OutOfMemory => {
-                    std.log.err("OOM while trac king client {}", .{id});
-                    _ = c.close(.{ .code = 1013 }) catch {};
-                },
-                else => unreachable,
-            }
-        };
-    }
-    pub fn onClose(self: *State, id: usize) void {
-        _ = self.conns.remove(id);
-    }
-
-    pub fn step(self: *State, dt: core.Seconds) void {
+    pub fn step(self: *State, dt: core.Seconds) !void {
         self.now += dt;
         // Pull messages off the queue.
         for (self.channel.flip()) |msg| {
-            defer self.alloc.free(msg.text);
-            self.broadcast(msg.text) catch |e| std.log.err("send {s}", .{e});
+            try self.broadcast(msg.text);
             // TODO: parse
             // cmd.parse(msg);
         }
@@ -108,12 +89,18 @@ pub const State = struct {
         try self.events.add(evt);
         try self.actions.put(actor, act);
     }
-    pub fn registerClient(self: *State, id: usize, c: *ws.Conn) !void {
+
+    pub fn onMessage(self: *State, user: usize, msg: []const u8) !void {
+        const buf = try self.alloc.dupe(u8, msg);
+        while (!self.channel.push(.{ .user = user, .text = buf })) std.atomic.spinLoopHint();
+    }
+    pub fn onConnect(self: *State, id: usize, c: *ws.Conn) !void {
         try self.conns.put(id, c);
     }
-    pub fn unregisterClient(self: *State, id: usize) void {
-        _ = self.conns.remove(id);
+    pub fn onDisconnect(self: *State, id: usize) void {
+        if (self.conns.remove(id)) std.log.debug("{d} disconnected.", .{id});
     }
+
     pub fn broadcast(self: *State, text: []const u8) !void {
         var it = self.conns.iterator();
         while (it.next()) |kv| {
