@@ -1,36 +1,39 @@
 const std = @import("std");
 const ws = @import("websocket");
 const cfg = @import("core").Config;
+
 var next_id: std.atomic.Value(usize) = .{ .raw = 1 };
 
-pub const Deps = struct {
-    alloc: std.mem.Allocator,
-    pushInbound: *const fn (usize, []u8) void,
-    registerClient: *const fn (usize, *ws.Conn) void,
-    unregister: *const fn (usize) void,
-};
+pub fn Handler(comptime T: type) type {
+    return struct {
+        impl: *T,
+        conn: *ws.Conn,
+        id: usize,
 
-const WsHandler = struct {
-    deps: *Deps,
-    conn: *ws.Conn,
-    user: usize,
-    pub fn init(_: *const ws.Handshake, conn: *ws.Conn, deps: *Deps) !WsHandler {
-        const id = next_id.fetchAdd(1, .monotonic);
-        deps.registerClient(id, conn);
-        return .{ .deps = deps, .conn = conn, .user = id };
-    }
-    pub fn deinit(self: *WsHandler) void {
-        self.deps.unregister(self.user);
-    }
-    pub fn clientMessage(self: *WsHandler, raw: []const u8) !void {
-        const buf = try self.deps.alloc.dupe(u8, raw);
-        self.deps.pushInbound(self.user, buf);
-        try self.conn.write(raw);
-    }
-};
+        pub fn init(h: *const ws.Handshake, conn: *ws.Conn, impl: *T) !@This() {
+            _ = h; // (custom checks here, like session token)
+            const id = next_id.fetchAdd(1, .monotonic);
+            try impl.onConnect(id, conn);
+            return .{ .impl = impl, .conn = conn, .id = id };
+        }
 
-pub fn host(deps: *Deps) !void {
-    var ws_server = try ws.Server(WsHandler).init(deps.alloc, cfg.Ws);
-    defer ws_server.deinit();
-    try ws_server.listen(deps);
+        pub fn deinit(self: *@This()) void {
+            self.impl.onDisconnect(self.id);
+        }
+
+        pub fn clientMessage(self: *@This(), raw: []const u8) !void {
+            try self.conn.write(raw);
+            // no allocation in the websocket thread
+            try self.impl.onMessage(self.id, raw);
+        }
+        pub fn close(self: *@This()) void {
+            self.deinit();
+        }
+    };
+}
+
+pub fn host(comptime T: type, allocator: std.mem.Allocator, impl: *T) !void {
+    var server = try ws.Server(Handler(T)).init(allocator, cfg.Ws);
+    defer server.deinit();
+    try server.listen(impl);
 }
