@@ -358,14 +358,33 @@ function postLine(text){
     el.style.opacity = Math.max(0.07, Math.pow(0.55, i));
   });
 }
+
+const ws = new WebSocket(`ws://${location.hostname}:${location.port}/`);
+ws.addEventListener("open", () => {
+  postLine("*** connected ***");
+});
+ws.addEventListener("message", ev => {
+  postLine(ev.data);           // every text frame → chat pane
+});
+ws.addEventListener("close", ev => {
+  postLine("*** disconnected (" + ev.code + ") ***");
+});
+ws.addEventListener("error", () => {
+  postLine("*** websocket error ***");
+});
+
+
 postLine('*** Welcome to the prototype! ***');
 
 cmd.addEventListener('keydown', e=>{
   if (e.key === 'Enter' && cmd.value.trim()){
     postLine(cmd.value);
+    ws.send(cmd.value);
     cmd.value = '';
   }
 });
+
+
 </script>
 </body>
 </html>
