@@ -104,7 +104,16 @@ pub const State = struct {
     pub fn broadcast(self: *State, text: []const u8) !void {
         var it = self.conns.iterator();
         while (it.next()) |kv| {
-            _ = kv.value_ptr.*.write(text) catch {};
+            const id = kv.key_ptr.*;
+            const conn = kv.value_ptr.*;
+            std.log.debug("sending to user={d}: {s}", .{ id, text });
+            conn.write(text) catch |err|
+                switch (err) {
+                    error.ConnectionResetByPeer, error.BrokenPipe => {
+                        self.onDisconnect(id);
+                    }, // prune
+                    else => std.log.err("ws write: {s}", .{@errorName(err)}),
+                };
         }
     }
 };
