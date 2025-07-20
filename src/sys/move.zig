@@ -42,7 +42,6 @@ pub const System = struct {
         self.positions_idx.deinit();
         self.levels.deinit();
         self.test_level.deinit();
-        self.alloc.destroy(self);
     }
 
     // TODO: can do init_frame and create an arena allocator so inbox/outbox are freed
