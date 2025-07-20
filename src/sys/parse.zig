@@ -110,15 +110,25 @@ test "parser – basic verbs and error cases" {
 
     try std.testing.expectEqualDeep(parse(.{
         .user = 0,
-        .text = "'blah",
-    }), Signal{ .Say = .{ .speaker = 0, .text = "blah" } });
+        .text = "'north",
+    }), Signal{ .Say = .{ .speaker = 0, .text = "north" } });
 
     try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "a" }));
     try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "attack Bob" }));
     try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "AtTaCk alice" }));
-
-    try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "north" }));
-    try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "ne" })); // maps to northeast
-    try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "nw" })); // northwest
-
+    const cases = [_]struct { verb: []const u8, dir: core.Cardinal }{
+        .{ .verb = "n", .dir = .north },
+        .{ .verb = "ne", .dir = .northeast },
+        .{ .verb = "e", .dir = .east },
+        .{ .verb = "se", .dir = .southeast },
+        .{ .verb = "s", .dir = .south },
+        .{ .verb = "sw", .dir = .southwest },
+        .{ .verb = "w", .dir = .west },
+    };
+    for (cases) |case| {
+        try std.testing.expectEqualDeep(parse(.{
+            .user = 0,
+            .text = case.verb,
+        }), Signal{ .Walk = .{ .mob = 0, .dir = case.dir } });
+    }
 }
