@@ -7,3 +7,7 @@ pub const Cardinal = @import("util.zig").Cardinal;
 pub const Channel = @import("channel.zig").Channel;
 pub const Command = @import("Command.zig").Command;
 pub const zts = @import("zts.zig");
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

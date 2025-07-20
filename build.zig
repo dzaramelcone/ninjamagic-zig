@@ -45,6 +45,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const sys = b.addModule("sys", .{
+        .root_source_file = b.path("src/sys/module.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     embed.addImport("zzz", zzz);
 
     core.addImport("zzz", zzz);
@@ -57,11 +63,14 @@ pub fn build(b: *std.Build) void {
     net.addImport("core", core);
     net.addImport("embed", embed);
 
+    sys.addImport("core", core);
+
     exe_mod.addImport("zzz", zzz);
     exe_mod.addImport("pg", pg);
     exe_mod.addImport("websocket", ws);
     exe_mod.addImport("core", core);
     exe_mod.addImport("net", net);
+    exe_mod.addImport("sys", sys);
     const exe = b.addExecutable(.{
         .name = "mud",
         .root_module = exe_mod,
@@ -78,19 +87,28 @@ pub fn build(b: *std.Build) void {
 
     const tests = b.addTest(.{
         .root_module = exe_mod,
+        .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
     });
     tests.root_module.addImport("core", core);
+    tests.root_module.addImport("sys", sys);
+
     const run_exe_unit_tests = b.addRunArtifact(tests);
 
     const test_step = b.step("test", "Run unit tests");
 
-    const core_tests = b.addTest(.{ .root_module = core });
-    const prs_tests = b.addTest(.{ .root_source_file = b.path("src/parse.zig") });
-    prs_tests.root_module.addImport("core", core);
+    const core_tests = b.addTest(.{
+        .root_module = core,
+        .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
+    });
+    const sys_tests = b.addTest(.{
+        .root_module = sys,
+        .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
+    });
+
     const run_core_tests = b.addRunArtifact(core_tests);
-    const run_prs_tests = b.addRunArtifact(prs_tests);
+    const run_sys_tests = b.addRunArtifact(sys_tests);
 
     test_step.dependOn(&run_exe_unit_tests.step);
     test_step.dependOn(&run_core_tests.step);
-    test_step.dependOn(&run_prs_tests.step);
+    test_step.dependOn(&run_sys_tests.step);
 }

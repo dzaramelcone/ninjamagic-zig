@@ -1,7 +1,6 @@
 const std = @import("std");
 const core = @import("core");
 const Command = core.Command;
-const State = @import("state.zig").State;
 
 pub fn parse(cmd: Command) !void {
     const input = cmd.text;
@@ -118,8 +117,6 @@ const cmds = .{
 };
 const raises = std.testing.expectError;
 test "parser – basic verbs and error cases" {
-
-    // 1.  Empty input  →  NothingSent
     try raises(error.NothingSent, parse(.{ .user = 0, .text = "" }));
     try raises(error.UnknownVerb, parse(.{ .user = 0, .text = "foobar" }));
 
