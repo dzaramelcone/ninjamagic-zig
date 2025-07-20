@@ -1,10 +1,8 @@
 const std = @import("std");
 const core = @import("core");
-const cfg = core.Config.Combat;
-const log = std.debug.print;
-
+const move = @import("sys").move;
 const ws = @import("websocket");
-const parser = @import("parse.zig");
+const sys = @import("sys");
 const Channel = core.Channel(core.Command, std.math.pow(usize, 2, 10));
 
 var counter: usize = 0;
@@ -28,6 +26,7 @@ pub const State = struct {
     alloc: std.mem.Allocator,
 
     positions: std.ArrayList(core.Point),
+    level: move.Level,
     actions: std.AutoHashMap(usize, Action),
     events: std.PriorityQueue(Event, void, eventCmp),
     now: core.Seconds,
@@ -44,10 +43,11 @@ pub const State = struct {
             .actions = std.AutoHashMap(usize, Action).init(alloc),
             .events = std.PriorityQueue(Event, void, eventCmp).init(alloc, undefined),
             .now = 0,
-
+            .level = move.Level.initStatic(alloc),
             .conns = std.AutoHashMap(usize, *ws.Conn).init(alloc),
             .channel = Channel{},
         };
+
         return self;
     }
 
@@ -62,10 +62,9 @@ pub const State = struct {
     pub fn step(self: *State, dt: core.Seconds) !void {
         self.now += dt;
         // Pull messages off the queue.
-        for (self.channel.flip()) |msg| {
-            try self.broadcast(msg.text);
-            // TODO: parse
-            // cmd.parse(msg);
+        for (self.channel.flip()) |cmd| {
+            defer self.alloc.free(cmd.text);
+            sys.parse(cmd);
         }
         // Handle events.
         while (self.events.peek()) |evt| {
@@ -92,7 +91,7 @@ pub const State = struct {
 
     pub fn onMessage(self: *State, user: usize, msg: []const u8) !void {
         const buf = try self.alloc.dupe(u8, msg);
-        while (!self.channel.push(.{ .user = user, .text = buf })) std.atomic.spinLoopHint();
+        if (!self.channel.push(.{ .user = user, .text = buf })) return error.ServerBacklogged;
     }
     pub fn onConnect(self: *State, id: usize, c: *ws.Conn) !void {
         try self.conns.put(id, c);
@@ -107,13 +106,7 @@ pub const State = struct {
             const id = kv.key_ptr.*;
             const conn = kv.value_ptr.*;
             std.log.debug("sending to user={d}: {s}", .{ id, text });
-            conn.write(text) catch |err|
-                switch (err) {
-                    error.ConnectionResetByPeer, error.BrokenPipe => {
-                        self.onDisconnect(id);
-                    }, // prune
-                    else => std.log.err("ws write: {s}", .{@errorName(err)}),
-                };
+            conn.write(text) catch |err| std.log.err("ws write: {s}", .{@errorName(err)});
         }
     }
 };
