@@ -5,9 +5,11 @@ pub const AnyCaseStringMap = @import("AnyCaseStringMap.zig").AnyCaseStringMap;
 pub const PrefixStringRegistry = @import("PrefixStringRegistry.zig").PrefixStringRegistry;
 pub const Cardinal = @import("util.zig").Cardinal;
 pub const Channel = @import("channel.zig").Channel;
-pub const Command = @import("Command.zig").Command;
+pub const Request = @import("Command.zig").Request;
+pub const Signal = @import("Command.zig").Signal;
+pub const WalkSignal = @import("Command.zig").WalkSignal;
 pub const zts = @import("zts.zig");
-
+pub const TempAllocator = @import("TempAllocator.zig");
 test {
     @import("std").testing.refAllDecls(@This());
 }

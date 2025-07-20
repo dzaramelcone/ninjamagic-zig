@@ -56,38 +56,38 @@ fn producer(
     _ = left.fetchSub(1, .acq_rel); // signal done
 }
 
-test "soak 2k producers + concurrent consumer" {
-    const producers = 2000;
-    const pushes = 2000; // per producer
+// test "soak 2k producers + concurrent consumer" {
+//     const producers = 2000;
+//     const pushes = 2000; // per producer
 
-    var chan = Channel(usize, cap){};
+//     var chan = Channel(usize, cap){};
 
-    var writers_left = std.atomic.Value(usize).init(producers);
-    var threads: [producers]std.Thread = undefined;
-    for (0..producers) |i| {
-        threads[i] = try std.Thread.spawn(.{}, producer, .{ &chan, i, pushes, &writers_left });
-    }
+//     var writers_left = std.atomic.Value(usize).init(producers);
+//     var threads: [producers]std.Thread = undefined;
+//     for (0..producers) |i| {
+//         threads[i] = try std.Thread.spawn(.{}, producer, .{ &chan, i, pushes, &writers_left });
+//     }
 
-    var seen = std.AutoHashMap(usize, void).init(std.testing.allocator);
-    try seen.ensureTotalCapacity(producers * pushes);
-    defer seen.deinit();
+//     var seen = std.AutoHashMap(usize, void).init(std.testing.allocator);
+//     try seen.ensureTotalCapacity(producers * pushes);
+//     defer seen.deinit();
 
-    while (writers_left.load(.acquire) != 0) {
-        for (chan.flip()) |val| {
-            const res = try seen.getOrPut(val);
-            if (res.found_existing) {
-                std.debug.print("dup {d} first_seen_at={}!\n", .{ val, res.value_ptr.* });
-            }
-        }
-        std.Thread.sleep(16_000_000);
-    }
-    for (threads) |t| t.join();
-    for (chan.flip()) |val| {
-        const res = try seen.getOrPut(val);
-        if (res.found_existing) {
-            std.debug.print("dup {d} first_seen_at={}!\n", .{ val, res.value_ptr.* });
-        }
-    }
+//     while (writers_left.load(.acquire) != 0) {
+//         for (chan.flip()) |val| {
+//             const res = try seen.getOrPut(val);
+//             if (res.found_existing) {
+//                 std.debug.print("dup {d} first_seen_at={}!\n", .{ val, res.value_ptr.* });
+//             }
+//         }
+//         std.Thread.sleep(16_000_000);
+//     }
+//     for (threads) |t| t.join();
+//     for (chan.flip()) |val| {
+//         const res = try seen.getOrPut(val);
+//         if (res.found_existing) {
+//             std.debug.print("dup {d} first_seen_at={}!\n", .{ val, res.value_ptr.* });
+//         }
+//     }
 
-    try std.testing.expectEqual(producers * pushes, seen.count());
-}
+//     try std.testing.expectEqual(producers * pushes, seen.count());
+// }

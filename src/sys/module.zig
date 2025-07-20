@@ -1,7 +1,7 @@
-const parser = @import("parse.zig");
-const move = @import("move.zig");
-pub const parse = parser.parse;
-pub const Level = move.Level;
+pub const parser = @import("parse.zig");
+pub const move = @import("move.zig");
+pub const outbox = @import("outbox.zig");
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

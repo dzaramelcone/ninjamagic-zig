@@ -1,0 +1,10 @@
+.NothingSent
+NothingSent
+.NotYetImplemented
+NotYetImplemented
+.UnknownVerb
+UnknownVerb
+.SaidNothing
+SaidNothing
+.Unknown
+Unknown

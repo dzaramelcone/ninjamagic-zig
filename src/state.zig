@@ -3,7 +3,7 @@ const core = @import("core");
 const move = @import("sys").move;
 const ws = @import("websocket");
 const sys = @import("sys");
-const Channel = core.Channel(core.Command, std.math.pow(usize, 2, 10));
+const Channel = core.Channel(core.Request, std.math.pow(usize, 2, 10));
 
 var counter: usize = 0;
 const Event = struct {
@@ -25,34 +25,31 @@ const Action = struct {
 pub const State = struct {
     alloc: std.mem.Allocator,
 
-    positions: std.ArrayList(core.Point),
-    level: move.Level,
     actions: std.AutoHashMap(usize, Action),
     events: std.PriorityQueue(Event, void, eventCmp),
     now: core.Seconds,
 
     conns: std.AutoHashMap(usize, *ws.Conn),
     channel: Channel,
+    move: sys.move.System,
 
-    pub fn init(alloc: std.mem.Allocator) !*State {
-        const self = try alloc.create(State);
-        self.* = .{
+    outbox: sys.outbox.System,
+
+    pub fn init(alloc: std.mem.Allocator) !State {
+        return .{
             .alloc = alloc,
 
-            .positions = std.ArrayList(core.Point).init(alloc),
             .actions = std.AutoHashMap(usize, Action).init(alloc),
             .events = std.PriorityQueue(Event, void, eventCmp).init(alloc, undefined),
+            .move = try sys.move.System.init(alloc),
             .now = 0,
-            .level = move.Level.initStatic(alloc),
             .conns = std.AutoHashMap(usize, *ws.Conn).init(alloc),
             .channel = Channel{},
+            .outbox = try sys.outbox.System.init(alloc),
         };
-
-        return self;
     }
 
     pub fn deinit(self: *State) void {
-        self.positions.deinit();
         self.actions.deinit();
         self.events.deinit();
         self.conns.deinit();
@@ -61,10 +58,22 @@ pub const State = struct {
 
     pub fn step(self: *State, dt: core.Seconds) !void {
         self.now += dt;
+
         // Pull messages off the queue.
-        for (self.channel.flip()) |cmd| {
-            defer self.alloc.free(cmd.text);
-            sys.parse(cmd);
+        for (self.channel.flip()) |req| {
+            // goofy free coming off another thread. TODO: figure this out better
+            defer self.alloc.free(req.text);
+
+            // TODO: handle error, probably just an ErrorSignal that sends a msg with better feedback for user
+            // can do zts s(err), add response text for each error type in errors.txt.
+            const sig = sys.parser.parse(req) catch |err| {
+                self.outbox.handle_parse_err(req, err);
+                continue;
+            };
+            switch (sig) {
+                .Walk => self.move.recv(sig),
+                else => return error.NotYetImplemented,
+            }
         }
         // Handle events.
         while (self.events.peek()) |evt| {
@@ -74,6 +83,14 @@ pub const State = struct {
             if (act.id != evt.id) continue;
             _ = self.actions.remove(evt.owner);
             act.callback(evt, act);
+        }
+        // Handle moves.
+        try self.move.step();
+
+        var it = try self.outbox.flush();
+        while (it.next()) |pkt| {
+            const conn = self.conns.get(pkt.recipient) orelse continue;
+            try conn.write(pkt.body);
         }
     }
 

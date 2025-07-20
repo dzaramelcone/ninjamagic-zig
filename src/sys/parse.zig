@@ -1,22 +1,24 @@
 const std = @import("std");
 const core = @import("core");
-const Command = core.Command;
-
-pub fn parse(cmd: Command) !void {
-    const input = cmd.text;
+const Request = core.Request;
+const Signal = core.Signal;
+pub const ParseError = error{
+    NothingSent,
+    NotYetImplemented,
+    UnknownVerb,
+    SaidNothing,
+};
+pub fn parse(req: Request) ParseError!Signal {
+    const input = req.text;
     if (input.len > 0 and input[0] == '\'') {
-        try Say.gather(input);
-        try Say.run(input);
-        return;
+        return Say.parse(req.user, input[1..]);
     }
 
     var tokens = std.mem.tokenizeScalar(u8, input, ' ');
     const word = tokens.next() orelse return error.NothingSent;
-    inline for (cmds) |C| if (matches(C, word)) {
-        ensureCommand(C);
-        try C.gather(input);
-        try C.run(input);
-        return;
+    inline for (parsers) |P| if (matches(P, word)) {
+        ensureParser(P);
+        return P.parse(req.user, if (req.text.len == word.len) "" else req.text[word.len + 1 ..]);
     };
     return error.UnknownVerb;
 }
@@ -27,14 +29,13 @@ fn matches(cmd: anytype, word: []const u8) bool {
     return std.ascii.eqlIgnoreCase(word, cmd.verb[0..word.len]);
 }
 
-fn ensureCommand(comptime C: type) void {
+fn ensureParser(comptime P: type) void {
     comptime {
-        if (!@hasDecl(C, "verb") or
-            !@hasDecl(C, "min_len") or
-            !@hasDecl(C, "gather") or
-            !@hasDecl(C, "run"))
+        if (!@hasDecl(P, "verb") or
+            !@hasDecl(P, "min_len") or
+            !@hasDecl(P, "parse"))
         {
-            @compileError(@typeName(C) ++ " does not satisfy the Command interface");
+            @compileError(@typeName(P) ++ " does not satisfy the parser interface");
         }
     }
 }
@@ -43,11 +44,8 @@ const Say = struct {
     pub const verb: []const u8 = "say";
     pub const min_len: usize = 3;
 
-    pub fn gather(_: []const u8) !void {
-        return error.NotYetImplemented;
-    }
-    pub fn run(_: []const u8) !void {
-        return error.NotYetImplemented;
+    pub fn parse(source: usize, args: []const u8) !Signal {
+        return if (args.len == 0) error.SaidNothing else .{ .Say = .{ .speaker = source, .text = args } };
     }
 };
 
@@ -55,10 +53,7 @@ pub const Look = struct {
     pub const verb: []const u8 = "look";
     pub const min_len: usize = 1;
 
-    pub fn gather(_: []const u8) !void {
-        return error.NotYetImplemented;
-    }
-    pub fn run(_: []const u8) !void {
+    pub fn parse(_: usize, _: []const u8) !Signal {
         return error.NotYetImplemented;
     }
 };
@@ -66,43 +61,36 @@ pub const Look = struct {
 const Attack = struct {
     pub const verb: []const u8 = "attack";
     pub const min_len: usize = 1;
-
-    fn gather(_: []const u8) !void {
-        return error.NotYetImplemented;
-    }
-    fn run(_: []const u8) !void {
+    pub fn parse(_: usize, _: []const u8) !Signal {
         return error.NotYetImplemented;
     }
 };
 
-fn Move(
+fn Walk(
     comptime Verb: []const u8,
     comptime MinLen: usize,
-    Dir: core.Cardinal,
+    comptime Dir: core.Cardinal,
 ) type {
     return struct {
         pub const verb = Verb;
         pub const min_len = MinLen;
         pub const dir = Dir;
 
-        pub fn gather(_: []const u8) !void {
-            return error.NotYetImplemented;
-        }
-        pub fn run(_: []const u8) !void {
-            return error.NotYetImplemented;
+        pub fn parse(source: usize, _: []const u8) !Signal {
+            return .{ .Walk = .{ .mob = source, .dir = dir } };
         }
     };
 }
-const N = Move("north", 1, .north);
-const NE = Move("ne", 2, .northeast);
-const E = Move("east", 1, .east);
-const SE = Move("se", 2, .southeast);
-const S = Move("south", 1, .south);
-const SW = Move("sw", 2, .southwest);
-const W = Move("west", 1, .west);
-const NW = Move("nw", 2, .northwest);
+const N = Walk("north", 1, .north);
+const NE = Walk("ne", 2, .northeast);
+const E = Walk("east", 1, .east);
+const SE = Walk("se", 2, .southeast);
+const S = Walk("south", 1, .south);
+const SW = Walk("sw", 2, .southwest);
+const W = Walk("west", 1, .west);
+const NW = Walk("nw", 2, .northwest);
 
-const cmds = .{
+const parsers = .{
     Say,
     Look,
     Attack,
@@ -120,7 +108,10 @@ test "parser – basic verbs and error cases" {
     try raises(error.NothingSent, parse(.{ .user = 0, .text = "" }));
     try raises(error.UnknownVerb, parse(.{ .user = 0, .text = "foobar" }));
 
-    try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "'blah" }));
+    try std.testing.expectEqualDeep(parse(.{
+        .user = 0,
+        .text = "'blah",
+    }), Signal{ .Say = .{ .speaker = 0, .text = "blah" } });
 
     try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "a" }));
     try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "attack Bob" }));
