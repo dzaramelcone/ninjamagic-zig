@@ -17,7 +17,7 @@ pub const System = struct {
         };
     }
     pub fn deinit(self: *System) void {
-        self.alloc.destroy(self);
+        self.outbox.deinit();
     }
     pub fn handle_parse_err(self: *System, req: core.Request, err: ParseError) void {
         const txt = switch (err) {
@@ -43,40 +43,23 @@ pub const System = struct {
 
     pub fn flush(self: *System) !OutIter {
         var map = std.AutoHashMap(usize, std.ArrayList([]const u8)).init(self.alloc);
+        defer map.deinit();
+        defer self.outbox.clearRetainingCapacity();
         for (self.outbox.items) |m| {
-            const list = try map.getOrPutValue(m.recipient, std.ArrayList([]const u8).init(self.alloc));
+            const sliceList = std.ArrayList([]const u8).init(self.alloc);
+            const list = try map.getOrPutValue(m.recipient, sliceList);
             try list.value_ptr.*.append(m.txt);
         }
-
         var packets = std.ArrayList(Packet).init(self.alloc);
-
         var it = map.iterator();
         while (it.next()) |entry| {
             const recipient = entry.key_ptr.*;
-            const sliceLst = entry.value_ptr.*;
-            var string = std.ArrayList(u8).init(self.alloc);
-            var jw = std.json.writeStream(string.writer(), .{ .whitespace = .indent_2 });
-
-            {
-                try jw.beginObject();
-                try jw.objectField("msgs");
-                try jw.beginArray();
-                for (sliceLst.items) |t| try jw.write(t);
-                try jw.endArray();
-                try jw.endObject();
-            }
-            const body = try string.toOwnedSlice();
+            const msgs_list = entry.value_ptr.*;
+            const body = try std.json.stringifyAlloc(self.alloc, .{ .msgs = msgs_list.items }, .{});
             try packets.append(.{ .recipient = recipient, .body = body });
-
-            // free per‑sender temp list
-            sliceLst.deinit();
+            msgs_list.deinit();
         }
-        map.deinit();
-
-        // 3. clear original message list
         for (self.outbox.items) |m| self.alloc.free(m.txt);
-        self.outbox.clearRetainingCapacity();
-
         return .{ .alloc = self.alloc, .list = packets, .idx = 0 };
     }
 
@@ -86,15 +69,62 @@ pub const System = struct {
         idx: usize,
 
         pub fn next(self: *OutIter) ?Packet {
+            if (self.idx > 0) {
+                self.alloc.free(self.list.items[self.idx - 1].body);
+            }
             if (self.idx >= self.list.items.len) {
                 self.list.deinit();
                 return null;
             }
             const pkt = self.list.items[self.idx];
             self.idx += 1;
-            // free body afterwards
-            defer self.alloc.free(pkt.body);
             return pkt;
         }
     };
 };
+
+fn t_reqs(user: usize) core.Request {
+    return .{ .user = user, .text = "" };
+}
+
+test "flush groups by recipient then empties outbox, JSON list is correct" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const A = gpa.allocator();
+
+    var sys = try System.init(A);
+    defer sys.deinit();
+
+    // enqueue three errors: two for user 1, one for user 2
+    sys.handle_parse_err(t_reqs(1), ParseError.UnknownVerb);
+    sys.handle_parse_err(t_reqs(1), ParseError.SaidNothing);
+    sys.handle_parse_err(t_reqs(2), ParseError.NotYetImplemented);
+
+    var it = try sys.flush();
+
+    // collect packets so we can assert without caring order
+    var got1 = false;
+    var got2 = false;
+
+    while (it.next()) |pkt| {
+        var parsed = std.json.parseFromSlice(
+            struct { msgs: []const []const u8 },
+            A,
+            pkt.body,
+            .{},
+        ) catch unreachable;
+        defer parsed.deinit();
+
+        if (pkt.recipient == 1) {
+            got1 = true;
+            try std.testing.expectEqual(@as(usize, 2), parsed.value.msgs.len);
+        } else if (pkt.recipient == 2) {
+            got2 = true;
+            try std.testing.expectEqual(@as(usize, 1), parsed.value.msgs.len);
+        } else unreachable;
+    }
+
+    try std.testing.expect(got1 and got2);
+    // outbox should now be empty
+    try std.testing.expectEqual(@as(usize, 0), sys.outbox.items.len);
+}
