@@ -5,23 +5,19 @@ const State = @import("state.zig").State;
 const cfg = @import("core").Config;
 const zts = @import("core").zts;
 
-const tmpl = @embedFile("foobar.txt");
-
 pub fn main() !void {
-    std.log.info(zts.s(tmpl, "foo"), .{"daytime"});
-    std.log.info(zts.s(tmpl, "bar"), .{"nighttime"});
     var gpa = std.heap.DebugAllocator(.{ .thread_safe = true }){};
-    const allocator = gpa.allocator();
+    const alloc = gpa.allocator();
     defer _ = gpa.deinit();
 
     // try db.doQueries(alloc);
 
-    var http = try std.Thread.spawn(.{}, net.host_http, .{allocator});
+    var http = try std.Thread.spawn(.{}, net.host_http, .{alloc});
     defer http.join();
+    var state = try State.init(alloc);
+    const state_ptr = &state;
 
-    const state = try State.init(allocator);
-
-    var ws = try std.Thread.spawn(.{}, net.host_ws, .{ State, allocator, state });
+    var ws = try std.Thread.spawn(.{}, net.host_ws, .{ State, alloc, state_ptr });
     defer ws.join();
     const tick: f64 = 1.0 / cfg.tps;
     const tick_ns = @as(u64, @intFromFloat(tick * 1e9));

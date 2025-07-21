@@ -23,9 +23,9 @@ pub fn Handler(comptime T: type) type {
 
         pub fn clientMessage(self: *@This(), raw: []const u8) !void {
             try self.conn.write(raw);
-            // no allocation in the websocket thread
-            try self.impl.onMessage(self.id, raw);
+            self.impl.onMessage(self.id, raw) catch |err| try self.conn.write(@errorName(err));
         }
+
         pub fn close(self: *@This()) void {
             self.deinit();
         }

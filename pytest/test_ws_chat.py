@@ -7,6 +7,7 @@ import websockets
 async def test_client_has_good_ping() -> None:
     alice = await websockets.connect(WS_URL)
     assert await alice.ping()
+    await alice.close()
 
 
 @pytest.mark.asyncio

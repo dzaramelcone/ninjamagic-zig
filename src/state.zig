@@ -1,11 +1,9 @@
 const std = @import("std");
 const core = @import("core");
-const cfg = core.Config.Combat;
-const log = std.debug.print;
-
+const move = @import("sys").move;
 const ws = @import("websocket");
-const parser = @import("parse.zig");
-const Channel = core.Channel(core.Command, std.math.pow(usize, 2, 10));
+const sys = @import("sys");
+const Channel = core.Channel(core.Request, std.math.pow(usize, 2, 10));
 
 var counter: usize = 0;
 const Event = struct {
@@ -27,32 +25,31 @@ const Action = struct {
 pub const State = struct {
     alloc: std.mem.Allocator,
 
-    positions: std.ArrayList(core.Point),
     actions: std.AutoHashMap(usize, Action),
     events: std.PriorityQueue(Event, void, eventCmp),
     now: core.Seconds,
 
     conns: std.AutoHashMap(usize, *ws.Conn),
     channel: Channel,
+    move: sys.move.System,
 
-    pub fn init(alloc: std.mem.Allocator) !*State {
-        const self = try alloc.create(State);
-        self.* = .{
+    outbox: sys.outbox.System,
+
+    pub fn init(alloc: std.mem.Allocator) !State {
+        return .{
             .alloc = alloc,
 
-            .positions = std.ArrayList(core.Point).init(alloc),
             .actions = std.AutoHashMap(usize, Action).init(alloc),
             .events = std.PriorityQueue(Event, void, eventCmp).init(alloc, undefined),
+            .move = try sys.move.System.init(alloc),
             .now = 0,
-
             .conns = std.AutoHashMap(usize, *ws.Conn).init(alloc),
             .channel = Channel{},
+            .outbox = try sys.outbox.System.init(alloc),
         };
-        return self;
     }
 
     pub fn deinit(self: *State) void {
-        self.positions.deinit();
         self.actions.deinit();
         self.events.deinit();
         self.conns.deinit();
@@ -61,11 +58,22 @@ pub const State = struct {
 
     pub fn step(self: *State, dt: core.Seconds) !void {
         self.now += dt;
+
         // Pull messages off the queue.
-        for (self.channel.flip()) |msg| {
-            try self.broadcast(msg.text);
-            // TODO: parse
-            // cmd.parse(msg);
+        for (self.channel.flip()) |req| {
+            // goofy free coming off another thread. TODO: figure this out better
+            defer self.alloc.free(req.text);
+
+            // TODO: handle error, probably just an ErrorSignal that sends a msg with better feedback for user
+            // can do zts s(err), add response text for each error type in errors.txt.
+            const sig = sys.parser.parse(req) catch |err| {
+                self.outbox.handle_parse_err(req, err);
+                continue;
+            };
+            switch (sig) {
+                .Walk => self.move.recv(sig),
+                else => return error.NotYetImplemented,
+            }
         }
         // Handle events.
         while (self.events.peek()) |evt| {
@@ -75,6 +83,14 @@ pub const State = struct {
             if (act.id != evt.id) continue;
             _ = self.actions.remove(evt.owner);
             act.callback(evt, act);
+        }
+        // Handle moves.
+        try self.move.step();
+
+        var it = try self.outbox.flush();
+        while (it.next()) |pkt| {
+            const conn = self.conns.get(pkt.recipient) orelse continue;
+            try conn.write(pkt.body);
         }
     }
 
@@ -92,7 +108,7 @@ pub const State = struct {
 
     pub fn onMessage(self: *State, user: usize, msg: []const u8) !void {
         const buf = try self.alloc.dupe(u8, msg);
-        while (!self.channel.push(.{ .user = user, .text = buf })) std.atomic.spinLoopHint();
+        if (!self.channel.push(.{ .user = user, .text = buf })) return error.ServerBacklogged;
     }
     pub fn onConnect(self: *State, id: usize, c: *ws.Conn) !void {
         try self.conns.put(id, c);
@@ -107,13 +123,7 @@ pub const State = struct {
             const id = kv.key_ptr.*;
             const conn = kv.value_ptr.*;
             std.log.debug("sending to user={d}: {s}", .{ id, text });
-            conn.write(text) catch |err|
-                switch (err) {
-                    error.ConnectionResetByPeer, error.BrokenPipe => {
-                        self.onDisconnect(id);
-                    }, // prune
-                    else => std.log.err("ws write: {s}", .{@errorName(err)}),
-                };
+            conn.write(text) catch |err| std.log.err("ws write: {s}", .{@errorName(err)});
         }
     }
 };
