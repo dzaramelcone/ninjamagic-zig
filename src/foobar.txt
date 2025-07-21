@@ -1,0 +1,4 @@
+.foo
+I like {s}
+.bar
+I prefer {s}
