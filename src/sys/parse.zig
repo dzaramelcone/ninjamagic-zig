@@ -3,12 +3,11 @@ const core = @import("core");
 const Request = core.Request;
 const Signal = core.Signal;
 pub const ParseError = error{
-    NothingSent,
     NotYetImplemented,
     UnknownVerb,
-    SaidNothing,
+    NothingSaid,
 };
-pub fn parse(req: Request) ParseError!Signal {
+pub fn parse(req: Request) !Signal {
     const input = req.text;
     if (input.len > 0 and input[0] == '\'') {
         return Say.parse(req.user, input[1..]);
@@ -45,7 +44,11 @@ const Say = struct {
     pub const min_len: usize = 3;
 
     pub fn parse(source: usize, args: []const u8) !Signal {
-        return if (args.len == 0) error.SaidNothing else .{ .Say = .{ .speaker = source, .text = args } };
+        const trimmed = std.mem.trim(u8, args, " \t\r\n");
+        return if (trimmed.len == 0)
+            error.NothingSaid
+        else
+            .{ .Say = .{ .speaker = source, .text = trimmed } };
     }
 };
 
@@ -113,6 +116,10 @@ test "parser – basic verbs and error cases" {
         .text = "'north",
     }), Signal{ .Say = .{ .speaker = 0, .text = "north" } });
 
+    try raises(error.NothingSaid, parse(.{ .user = 0, .text = "'" }));
+    try raises(error.NothingSaid, parse(.{ .user = 0, .text = "' " }));
+    try raises(error.NothingSaid, parse(.{ .user = 0, .text = "say" }));
+    try raises(error.NothingSaid, parse(.{ .user = 0, .text = "say " }));
     try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "a" }));
     try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "attack Bob" }));
     try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "AtTaCk alice" }));
