@@ -58,13 +58,12 @@ pub fn step(now: core.Seconds) !void {
 }
 
 test "single event fires at end time" {
-    // ── fresh allocator
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     init(gpa.allocator());
     defer deinit();
 
-    // ── schedule action that should fire at t = 10
+    // schedule action that should fire at t = 10
     const now: core.Seconds = 0;
     try startAction(
         1,
@@ -81,14 +80,14 @@ test "single event fires at end time" {
         10,
     );
 
-    // before end → nothing fired
+    // before end, nothing fired
     try step(9);
     {
         var it = try core.bus.attack.flush();
         try std.testing.expectEqual(@as(?*sig.Attack, null), it.next());
     }
 
-    // at end → signal fired
+    // at end, signal fired
     try step(10);
     {
         var it = try core.bus.attack.flush();
