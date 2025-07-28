@@ -10,7 +10,7 @@ pub const Attack = struct { source: usize, target: usize };
 
 pub const Outbound = union(enum) {
     Message: struct { source: usize, text: []const u8 },
-    PosUpdate: struct { source: usize, from: Position, to: Position },
+    PosUpdate: struct { source: usize, moveFrom: Position, moveTo: Position },
 };
 
 pub const Signal = union(enum) {
