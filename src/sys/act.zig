@@ -40,10 +40,16 @@ pub fn init(alloc: std.mem.Allocator) void {
     events = std.PriorityQueue(Event, void, eventCmp).init(alloc, undefined);
 }
 
+pub fn deinit() void {
+    actions.deinit();
+    events.deinit();
+}
+
 pub fn step(now: core.Seconds) !void {
     while (events.peek()) |evt| {
         if (evt.end > now) break;
         _ = events.remove();
+
         const act = actions.get(evt.owner) orelse continue;
         if (act.id != evt.id) continue;
         _ = actions.remove(evt.owner);
@@ -56,6 +62,7 @@ test "single event fires at end time" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     init(gpa.allocator());
+    defer deinit();
 
     // ── schedule action that should fire at t = 10
     const now: core.Seconds = 0;
