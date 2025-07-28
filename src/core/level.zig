@@ -1,24 +1,11 @@
 const std = @import("std");
+
 pub const Tile = enum { floor, wall };
-pub const Position = struct { lvl_key: usize, x: usize, y: usize };
 
-fn toTiles(s: []const u8) [10]Tile {
-    var out: [10]Tile = undefined;
-    for (s, 0..) |c, i| out[i] = if (c == '#') .wall else .floor;
-    return out;
-}
-
-const static_tiles = [_][10]Tile{
-    toTiles("..######.."),
-    toTiles(".........."),
-    toTiles("#.######.#"),
-    toTiles("#.#....#.#"),
-    toTiles(".........."),
-    toTiles(".........."),
-    toTiles("#.#....#.#"),
-    toTiles("#.######.#"),
-    toTiles(".........."),
-    toTiles("..######.."),
+pub const Position = struct {
+    lvl_key: usize,
+    x: usize,
+    y: usize,
 };
 
 pub const Level = struct {
@@ -57,4 +44,23 @@ pub const Level = struct {
     pub fn tile(self: *const Level, x: usize, y: usize) Tile {
         return self.tiles[y * self.width + x];
     }
+};
+
+fn toTiles(s: []const u8) [10]Tile {
+    var out: [10]Tile = undefined;
+    for (s, 0..) |c, i| out[i] = if (c == '#') .wall else .floor;
+    return out;
+}
+
+const static_tiles = [_][10]Tile{
+    toTiles("..######.."),
+    toTiles(".........."),
+    toTiles("#.######.#"),
+    toTiles("#.#....#.#"),
+    toTiles(".........."),
+    toTiles(".........."),
+    toTiles("#.#....#.#"),
+    toTiles("#.######.#"),
+    toTiles(".........."),
+    toTiles("..######.."),
 };
