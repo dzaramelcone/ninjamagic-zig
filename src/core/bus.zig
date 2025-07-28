@@ -17,10 +17,6 @@ fn Topic(comptime T: type, N: usize) type {
             self.count += 1;
         }
 
-        pub fn slice(self: *Self) []T {
-            return self.items[0..self.count];
-        }
-
         pub fn flush(self: *Self) !Iter {
             if (self.flushing) return error.FlushWhileFlushing;
             self.flushing = true;
