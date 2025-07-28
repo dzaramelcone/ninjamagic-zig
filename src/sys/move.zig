@@ -5,14 +5,14 @@ const Position = core.Position;
 const Self = @This();
 
 var positions: std.MultiArrayList(Position) = .{};
-var positions_idx: std.AutoHashMap(usize, usize) = undefined;
+var mob_rows: std.AutoHashMap(usize, usize) = undefined;
 var levels: std.AutoHashMap(usize, Level) = undefined;
 var test_level: *Level = undefined;
 var alloc: std.mem.Allocator = undefined;
 
 pub fn init(allocator: std.mem.Allocator) !void {
     alloc = allocator;
-    positions_idx = std.AutoHashMap(usize, usize).init(alloc);
+    mob_rows = std.AutoHashMap(usize, usize).init(alloc);
     levels = std.AutoHashMap(usize, Level).init(alloc);
     test_level = try Level.initStatic(alloc);
     try levels.put(0, test_level.*);
@@ -21,7 +21,7 @@ pub fn init(allocator: std.mem.Allocator) !void {
 pub fn deinit() void {
     test_level.deinit();
     levels.deinit();
-    positions_idx.deinit();
+    mob_rows.deinit();
     positions.deinit(alloc);
     alloc = undefined;
 }
@@ -35,34 +35,45 @@ pub fn step() !void {
     }
 }
 
-pub fn walk(sig: core.sig.Walk) !core.sig.Outbound {
+pub const MovementError = error{
+    MobNotFound,
+    LevelNotFound,
+    PositionOutOfBounds,
+    DestinationCollision,
+};
+
+pub const PlacementError = MovementError || error{MobUniqueViolation};
+
+pub fn walk(sig: core.sig.Walk) MovementError!core.sig.Outbound {
     const cur = try get(sig.mob);
-    const lvl = levels.get(cur.lvl_key) orelse return error.UnknownLevel;
+    const lvl = levels.get(cur.lvl_key) orelse return error.LevelNotFound;
 
     const next = walk_helper(cur, sig.dir, lvl.width, lvl.height, lvl.wraps);
-    if (!lvl.inBounds(next.x, next.y)) return error.OutOfBounds;
-    if (lvl.tile(next.x, next.y) == .wall) return error.Blocked;
+    if (!lvl.inBounds(next.x, next.y)) return error.PositionOutOfBounds;
+    if (lvl.tile(next.x, next.y) == .wall) return error.DestinationCollision;
 
     // TODO there could be quite a few outbound messages because of a movement
     try set(sig.mob, next);
     return .{ .PosUpdate = .{
         .source = sig.mob,
-        .from = cur,
-        .to = next,
+        .moveFrom = cur,
+        .moveTo = next,
     } };
 }
 
-pub fn place(id: usize, p: Position) !void {
-    if (positions_idx.contains(id)) return error.UniqueViolation;
-    const lvl = levels.get(p.lvl_key) orelse return error.UnknownLevel;
-    if (!lvl.inBounds(p.x, p.y)) return error.OutOfBounds;
+pub fn place(mob: usize, p: Position) PlacementError!void {
+    if (mob_rows.contains(mob)) return error.MobUniqueViolation;
+    const lvl = levels.get(p.lvl_key) orelse return error.LevelNotFound;
+    if (!lvl.inBounds(p.x, p.y)) return error.PositionOutOfBounds;
+    if (lvl.tile(p.x, p.y) == .wall) return error.DestinationCollision;
+
     const row = positions.len;
-    try positions.append(alloc, p);
-    try positions_idx.put(id, row);
+    positions.append(alloc, p) catch @panic("OOM");
+    mob_rows.put(mob, row) catch @panic("OOM");
 }
 
-pub fn get(id: usize) !Position {
-    const row = positions_idx.get(id) orelse return error.NotFound;
+pub fn get(mob: usize) !Position {
+    const row = mob_rows.get(mob) orelse return error.MobNotFound;
     return Position{
         .lvl_key = positions.items(.lvl_key)[row],
         .x = positions.items(.x)[row],
@@ -70,8 +81,8 @@ pub fn get(id: usize) !Position {
     };
 }
 
-pub fn set(id: usize, p: Position) !void {
-    const row = positions_idx.get(id) orelse return error.NotFound;
+pub fn set(mob: usize, p: Position) !void {
+    const row = mob_rows.get(mob) orelse return error.MobNotFound;
     positions.set(row, p);
 }
 
@@ -106,12 +117,27 @@ test "system – directional walk validates blocked/out-of-bounds" {
 
     // Simple east move (x + 1)
     const outb = try walk(.{ .mob = 1, .dir = .east });
-    try std.testing.expectEqual(@as(u32, 2), outb.PosUpdate.to.x);
-    try std.testing.expectEqual(@as(u32, 1), outb.PosUpdate.to.y);
+    try std.testing.expectEqual(@as(u32, 2), outb.PosUpdate.moveTo.x);
+    try std.testing.expectEqual(@as(u32, 1), outb.PosUpdate.moveTo.y);
 
-    // Move into wall
-    try raises(error.Blocked, walk(.{ .mob = 1, .dir = .north }));
-
-    // Move non-existent mob
-    try raises(error.NotFound, walk(.{ .mob = 999, .dir = .south }));
+    try raises(
+        MovementError.DestinationCollision,
+        walk(.{ .mob = 1, .dir = .north }),
+    );
+    try raises(
+        MovementError.MobNotFound,
+        walk(.{ .mob = 999, .dir = .south }),
+    );
+    try raises(
+        PlacementError.MobUniqueViolation,
+        place(1, .{ .lvl_key = 20, .x = 1, .y = 1 }),
+    );
+    try raises(
+        PlacementError.PositionOutOfBounds,
+        place(2, .{ .lvl_key = 0, .x = 0, .y = 200 }),
+    );
+    try raises(
+        PlacementError.LevelNotFound,
+        place(2, .{ .lvl_key = 20, .x = 1, .y = 1 }),
+    );
 }
