@@ -25,8 +25,6 @@ pub const State = struct {
     }
 
     pub fn deinit(self: *State) void {
-        self.actions.deinit();
-        self.events.deinit();
         self.conns.deinit();
         self.alloc.destroy(self);
     }
@@ -45,7 +43,7 @@ pub const State = struct {
         try sys.move.step();
 
         // Send all pending packets to clients.
-        var it = try sys.outbox.flush();
+        var it = try sys.outbox.flush(self.alloc);
         while (it.next()) |pkt| {
             const conn = self.conns.get(pkt.recipient) orelse continue;
             try conn.write(pkt.body);
