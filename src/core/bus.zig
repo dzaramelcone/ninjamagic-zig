@@ -3,6 +3,19 @@ const sig = @import("sig.zig");
 
 const DEFAULT_SZ = 512;
 
+pub const MovementError = error{
+    MobNotFound,
+    LevelNotFound,
+    PositionOutOfBounds,
+    DestinationCollision,
+};
+pub const AppendError = error{
+    AppendWhileFlushing,
+    Full,
+};
+
+pub const FlushError = error{FlushWhileFlushing};
+
 fn Topic(comptime T: type, N: usize) type {
     return struct {
         const Self = @This();
@@ -10,14 +23,14 @@ fn Topic(comptime T: type, N: usize) type {
         items: [N]T = undefined,
         flushing: bool = false,
 
-        pub fn append(self: *Self, item: T) !void {
+        pub fn append(self: *Self, item: T) AppendError!void {
             if (self.flushing) return error.AppendWhileFlushing;
             if (self.count == N) return error.Full;
             self.items[self.count] = item;
             self.count += 1;
         }
 
-        pub fn flush(self: *Self) !Iter {
+        pub fn flush(self: *Self) FlushError!Iter {
             if (self.flushing) return error.FlushWhileFlushing;
             self.flushing = true;
             return Self.Iter{ .topic = self };
@@ -54,7 +67,7 @@ pub var say: SayTopic = .{};
 pub var attack: AttackTopic = .{};
 pub var outbound: OutboundTopic = .{};
 
-pub fn enqueue(signal: sig.Signal) !void {
+pub fn enqueue(signal: sig.Signal) AppendError!void {
     switch (signal) {
         .Walk => |v| try walk.append(v),
         .Look => |v| try look.append(v),
