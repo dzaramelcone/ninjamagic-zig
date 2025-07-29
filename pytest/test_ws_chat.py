@@ -13,14 +13,13 @@ async def test_client_has_good_ping() -> None:
 @pytest.mark.asyncio
 async def test_chat():
     alice, bob = await websockets.connect(WS_URL), await websockets.connect(WS_URL)
-    await alice.send("hello-from-alice")
-    assert await alice.recv() == "hello-from-alice"
-    assert await alice.recv() == "hello-from-alice"
-    assert await bob.recv() == "hello-from-alice"
+    await alice.send("say hi")
+    assert await alice.recv() == "You say, \'hi\'"
+    assert await bob.recv() == "Alice says, \'hi\'"
     
-    await bob.send("hello-from-bob")
-    assert await alice.recv() == "hello-from-bob"
-    assert await bob.recv() == "hello-from-bob"
-    assert await bob.recv() == "hello-from-bob"
+    await bob.send("\'hello")
+    assert await alice.recv() == "Bob says, \'hello\'"
+    assert await bob.recv() == "You say, \'hello\'"
+
     await alice.close()
     await bob.close()
