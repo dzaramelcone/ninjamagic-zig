@@ -3,3 +3,7 @@ pub const host_http = @import("web.zig").host;
 const ws = @import("websocket");
 
 pub const Conn = ws.Conn;
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}

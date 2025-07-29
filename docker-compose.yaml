@@ -23,13 +23,13 @@ services:
 
   app:
     container_name: app
-    build: 
-      context: .
-      target: runtime
+    image: busybox
     platform: "linux/amd64"
-    depends_on:
-      db:
-        condition: service_healthy
+    volumes: [./zig-out/bin/mud:/usr/local/bin/mud]
+    entrypoint: ["/usr/local/bin/mud"]
+    # depends_on:
+    #   db:
+    #     condition: service_healthy
     ports:
       - "9862:9862"
       - "9224:9224"

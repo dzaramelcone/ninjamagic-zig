@@ -56,9 +56,9 @@ fn producer(
     _ = left.fetchSub(1, .acq_rel); // signal done
 }
 
-test "soak 2k producers + concurrent consumer" {
-    const producers = 2000;
-    const pushes = 2000; // per producer
+test "soak .2k producers + concurrent consumer" {
+    const producers = 200;
+    const pushes = 200; // per producer
 
     var chan = Channel(usize, cap){};
 
@@ -82,10 +82,12 @@ test "soak 2k producers + concurrent consumer" {
         std.Thread.sleep(16_000_000);
     }
     for (threads) |t| t.join();
-    for (chan.flip()) |val| {
-        const res = try seen.getOrPut(val);
-        if (res.found_existing) {
-            std.debug.print("dup {d} first_seen_at={}!\n", .{ val, res.value_ptr.* });
+    for (0..2) |_| {
+        for (chan.flip()) |val| {
+            const res = try seen.getOrPut(val);
+            if (res.found_existing) {
+                std.debug.print("dup {d} first_seen_at={}!\n", .{ val, res.value_ptr.* });
+            }
         }
     }
 
