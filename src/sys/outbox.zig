@@ -10,16 +10,16 @@ fn getSource(outbound: core.sig.Outbound) usize {
     };
 }
 
+// Theoretical maximum allocated memory would be largest possible outbound message * static fifo size.
+// If we clip it to a reasonable packet frame, it would be about 4KiB per msg * 1024 = 4MiB,
+// so 16MiB per frame should be very conservative.
 pub fn flush(parent: std.mem.Allocator) !OutIter {
     var outb = &core.bus.outbound;
-    // Theoretical maximum allocated memory would be largest possible outbound message * static fifo size.
-    // If we clip it to a reasonable packet frame, it would be about 4KiB per msg * 1024 = 4MiB,
-    // so 16MiB per game frame should be very conservative.
     var alloc = std.heap.ArenaAllocator.init(parent);
     const a = alloc.allocator();
     var it = try outb.flush();
     var pending = std.ArrayList(core.sig.Outbound).init(a);
-    while (it.next()) |msg_ptr| try pending.append(msg_ptr.*);
+    while (it.next()) |msg_ptr| pending.append(msg_ptr.*) catch @panic("OOM");
 
     // TODO this needs to turn into actual recipients..
     std.sort.block(core.sig.Outbound, pending.items, {}, struct {
@@ -40,11 +40,11 @@ pub fn flush(parent: std.mem.Allocator) !OutIter {
                 .Message => |msg| msg.text,
                 .PosUpdate => return error.NotYetImplemented,
             };
-            try lines.append(line);
+            lines.append(line) catch @panic("OOM");
         }
 
-        const body = try std.json.stringifyAlloc(a, .{ .msgs = lines.items }, .{});
-        try packets.append(.{ .recipient = rid, .body = body });
+        const body = std.json.stringifyAlloc(a, .{ .msgs = lines.items }, .{}) catch @panic("OOM");
+        packets.append(.{ .recipient = rid, .body = body }) catch @panic("OOM");
 
         i = j;
     }

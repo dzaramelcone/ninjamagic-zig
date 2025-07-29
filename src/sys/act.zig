@@ -20,7 +20,7 @@ const Action = struct {
     on_execute: sig.Signal,
 };
 
-pub fn startAction(actor: usize, act: Action, now: core.Seconds, dur: core.Seconds) !void {
+pub fn startAction(actor: usize, act: Action, now: core.Seconds, dur: core.Seconds) void {
     const evt = Event{
         .id = counter,
         .owner = actor,
@@ -28,8 +28,8 @@ pub fn startAction(actor: usize, act: Action, now: core.Seconds, dur: core.Secon
         .end = now + dur,
     };
     counter += 1;
-    try events.add(evt);
-    try actions.put(actor, act);
+    events.add(evt) catch @panic("OOM");
+    actions.put(actor, act) catch @panic("OOM");
 }
 
 var actions: std.AutoHashMap(usize, Action) = undefined;
@@ -45,15 +45,15 @@ pub fn deinit() void {
     events.deinit();
 }
 
-pub fn step(now: core.Seconds) !void {
+pub fn step(now: core.Seconds) void {
     while (events.peek()) |evt| {
         if (evt.end > now) break;
-        _ = events.remove();
-
         const act = actions.get(evt.owner) orelse continue;
         if (act.id != evt.id) continue;
-        _ = actions.remove(evt.owner);
-        try core.bus.enqueue(act.on_execute);
+        defer _ = actions.remove(evt.owner);
+        defer _ = events.remove();
+
+        core.bus.enqueue(act.on_execute) catch break;
     }
 }
 
@@ -65,7 +65,7 @@ test "single event fires at end time" {
 
     // schedule action that should fire at t = 10
     const now: core.Seconds = 0;
-    try startAction(
+    startAction(
         1,
         .{
             .id = 0,
@@ -81,14 +81,14 @@ test "single event fires at end time" {
     );
 
     // before end, nothing fired
-    try step(9);
+    step(9);
     {
         var it = try core.bus.attack.flush();
         try std.testing.expectEqual(@as(?*sig.Attack, null), it.next());
     }
 
     // at end, signal fired
-    try step(10);
+    step(10);
     {
         var it = try core.bus.attack.flush();
         const s = it.next() orelse unreachable;

@@ -26,14 +26,25 @@ pub fn deinit() void {
     alloc = undefined;
 }
 
-pub fn step() !void {
+pub fn toPlayer(_: MovementError) []const u8 {
+    // TODO better error messages; e.g. DestinationCollision should be unique to the obstruction.
+    return "You can't go there.";
+}
+
+pub fn step() void {
     var it = try core.bus.walk.flush();
     while (it.next()) |w| {
-        // TODO handle errors.
-        const event = try walk(w.*);
-        try core.bus.enqueue(.{ .Outbound = event });
+        const event = walk(w.*) catch |err| {
+            core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .source = w.mob, .text = toPlayer(err) } } });
+            continue;
+        };
+        core.bus.enqueue(.{ .Outbound = event }) catch continue;
     }
 }
+
+pub const MobNotFound = error{
+    MobNotFound,
+};
 
 pub const MovementError = error{
     MobNotFound,
@@ -62,17 +73,17 @@ pub fn walk(sig: core.sig.Walk) MovementError!core.sig.Outbound {
 }
 
 pub fn place(mob: usize, p: Position) PlacementError!void {
-    if (mob_rows.contains(mob)) return error.MobUniqueViolation;
     const lvl = levels.get(p.lvl_key) orelse return error.LevelNotFound;
     if (!lvl.inBounds(p.x, p.y)) return error.PositionOutOfBounds;
     if (lvl.tile(p.x, p.y) == .wall) return error.DestinationCollision;
+    if (mob_rows.contains(mob)) return error.MobUniqueViolation;
 
     const row = positions.len;
     positions.append(alloc, p) catch @panic("OOM");
     mob_rows.put(mob, row) catch @panic("OOM");
 }
 
-pub fn get(mob: usize) !Position {
+pub fn get(mob: usize) MobNotFound!Position {
     const row = mob_rows.get(mob) orelse return error.MobNotFound;
     return Position{
         .lvl_key = positions.items(.lvl_key)[row],
@@ -81,7 +92,7 @@ pub fn get(mob: usize) !Position {
     };
 }
 
-pub fn set(mob: usize, p: Position) !void {
+pub fn set(mob: usize, p: Position) MobNotFound!void {
     const row = mob_rows.get(mob) orelse return error.MobNotFound;
     positions.set(row, p);
 }
@@ -89,6 +100,7 @@ pub fn set(mob: usize, p: Position) !void {
 fn inc(v: usize, max: usize) usize {
     return @min(v +| 1, max);
 }
+
 fn dec(v: usize) usize {
     return if (v == 0) 0 else v - 1;
 }
@@ -130,7 +142,7 @@ test "system – directional walk validates blocked/out-of-bounds" {
     );
     try raises(
         PlacementError.MobUniqueViolation,
-        place(1, .{ .lvl_key = 20, .x = 1, .y = 1 }),
+        place(1, .{ .lvl_key = 0, .x = 1, .y = 1 }),
     );
     try raises(
         PlacementError.PositionOutOfBounds,

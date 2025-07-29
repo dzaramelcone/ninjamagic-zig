@@ -34,13 +34,14 @@ pub const State = struct {
 
         // Pull messages off the queue.
         for (self.channel.flip()) |sig| {
-            try core.bus.enqueue(sig);
+            core.bus.enqueue(sig) catch continue;
         }
+
         // Handle actions.
-        try sys.act.step(self.now);
+        sys.act.step(self.now);
 
         // Handle moves.
-        try sys.move.step();
+        sys.move.step();
 
         // Send all pending packets to clients.
         var it = try sys.outbox.flush(self.alloc);
