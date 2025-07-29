@@ -32,10 +32,10 @@ pub fn toPlayer(_: MovementError) []const u8 {
 }
 
 pub fn step() void {
-    var it = try core.bus.walk.flush();
+    var it = core.bus.walk.flush() catch return;
     while (it.next()) |w| {
         const event = walk(w.*) catch |err| {
-            core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .source = w.mob, .text = toPlayer(err) } } });
+            core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .source = w.mob, .text = toPlayer(err) } } }) catch continue;
             continue;
         };
         core.bus.enqueue(.{ .Outbound = event }) catch continue;
