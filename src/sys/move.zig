@@ -97,24 +97,26 @@ pub fn set(mob: usize, p: Position) MobNotFound!void {
     positions.set(row, p);
 }
 
-fn inc(v: usize, max: usize) usize {
-    return @min(v +| 1, max);
+fn inc(v: usize, max: usize, wraps: bool) usize {
+    if (wraps) return if (v + 1 == max) 0 else v + 1;
+    return if (v + 1 >= max) max - 1 else v + 1;
 }
 
-fn dec(v: usize) usize {
+fn dec(v: usize, max: usize, wraps: bool) usize {
+    if (wraps) return if (v == 0) max - 1 else v - 1;
     return if (v == 0) 0 else v - 1;
 }
 
-fn walk_helper(p: Position, dir: core.Cardinal, w: usize, h: usize, _: bool) Position {
+fn walk_helper(p: Position, dir: core.Cardinal, w: usize, h: usize, wraps: bool) Position {
     return switch (dir) {
-        .north => .{ .lvl_key = p.lvl_key, .x = p.x, .y = inc(p.y, h) },
-        .northeast => .{ .lvl_key = p.lvl_key, .x = inc(p.x, w), .y = inc(p.y, h) },
-        .east => .{ .lvl_key = p.lvl_key, .x = inc(p.x, w), .y = p.y },
-        .southeast => .{ .lvl_key = p.lvl_key, .x = inc(p.x, w), .y = dec(p.y) },
-        .south => .{ .lvl_key = p.lvl_key, .x = p.x, .y = dec(p.y) },
-        .southwest => .{ .lvl_key = p.lvl_key, .x = dec(p.x), .y = dec(p.y) },
-        .west => .{ .lvl_key = p.lvl_key, .x = dec(p.x), .y = p.y },
-        .northwest => .{ .lvl_key = p.lvl_key, .x = dec(p.x), .y = inc(p.y, h) },
+        .north => .{ .lvl_key = p.lvl_key, .x = p.x, .y = inc(p.y, h, wraps) },
+        .northeast => .{ .lvl_key = p.lvl_key, .x = inc(p.x, w, wraps), .y = inc(p.y, h, wraps) },
+        .east => .{ .lvl_key = p.lvl_key, .x = inc(p.x, w, wraps), .y = p.y },
+        .southeast => .{ .lvl_key = p.lvl_key, .x = inc(p.x, w, wraps), .y = dec(p.y, wraps) },
+        .south => .{ .lvl_key = p.lvl_key, .x = p.x, .y = dec(p.y, wraps) },
+        .southwest => .{ .lvl_key = p.lvl_key, .x = dec(p.x, wraps), .y = dec(p.y, wraps) },
+        .west => .{ .lvl_key = p.lvl_key, .x = dec(p.x, wraps), .y = p.y },
+        .northwest => .{ .lvl_key = p.lvl_key, .x = dec(p.x, wraps), .y = inc(p.y, h, wraps) },
     };
 }
 
