@@ -85,7 +85,7 @@ pub const OutIter = struct {
     }
 };
 
-test "flush groups by recipient and renders compact JSON" {
+test "render compact JSON, bundle packets" {
     var outb = &core.bus.outbound;
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
