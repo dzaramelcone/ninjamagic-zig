@@ -43,6 +43,8 @@ pub const State = struct {
         // Handle moves.
         sys.move.step();
 
+        sys.sight.step();
+
         // Send all pending packets to clients.
         var it = try sys.outbox.flush(self.alloc);
         while (it.next()) |pkt| {
