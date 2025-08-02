@@ -60,7 +60,7 @@ const Say = struct {
         return if (trimmed.len == 0)
             error.NothingSaid
         else
-            .{ .Say = .{ .speaker = source, .text = trimmed } };
+            .{ .Say = .{ .source = source, .text = trimmed } };
     }
 };
 
@@ -88,7 +88,7 @@ fn Walk(comptime Verb: []const u8, comptime MinLen: usize, comptime Dir: core.Ca
         pub const dir = Dir;
 
         pub fn parse(source: usize, _: []const u8) !Signal {
-            return .{ .Walk = .{ .mob = source, .dir = dir } };
+            return .{ .Walk = .{ .source = source, .dir = dir } };
         }
     };
 }
@@ -122,7 +122,7 @@ test "parser – basic verbs and error cases" {
     try std.testing.expectEqualDeep(parse(.{
         .user = 0,
         .text = "'north ",
-    }), Signal{ .Say = .{ .speaker = 0, .text = "north" } });
+    }), Signal{ .Say = .{ .source = 0, .text = "north" } });
 
     try raises(error.NothingSaid, parse(.{ .user = 0, .text = "'" }));
     try raises(error.NothingSaid, parse(.{ .user = 0, .text = "' " }));
@@ -144,6 +144,6 @@ test "parser – basic verbs and error cases" {
         try std.testing.expectEqualDeep(parse(.{
             .user = 0,
             .text = case.verb,
-        }), Signal{ .Walk = .{ .mob = 0, .dir = case.dir } });
+        }), Signal{ .Walk = .{ .source = 0, .dir = case.dir } });
     }
 }
