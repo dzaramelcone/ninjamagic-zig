@@ -5,7 +5,7 @@ const net = @import("net");
 const move = @import("move.zig");
 const VIEW_RADIUS: usize = 7; // tweak later
 
-fn canSee(a: core.Position, b: core.Position) bool {
+pub fn canSee(a: core.Position, b: core.Position) bool {
     return a.lvl_key == b.lvl_key and @max(a.x, b.x) - @min(a.x, b.x) <= VIEW_RADIUS and @max(a.y, b.y) - @min(a.y, b.y) <= VIEW_RADIUS;
 }
 
