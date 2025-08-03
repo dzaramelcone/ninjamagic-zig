@@ -31,7 +31,9 @@ pub const State = struct {
 
     pub fn step(self: *State, dt: core.Seconds) !void {
         self.now += dt;
-
+        var arena_allocator = std.heap.ArenaAllocator.init(self.alloc);
+        defer arena_allocator.deinit();
+        const arena = arena_allocator.allocator();
         // Pull messages off the queue.
         for (self.channel.flip()) |sig| {
             core.bus.enqueue(sig) catch continue;
@@ -45,8 +47,10 @@ pub const State = struct {
 
         sys.sight.step();
 
+        try sys.emit.step(arena);
+
         // Send all pending packets to clients.
-        var it = try sys.outbox.flush(self.alloc);
+        var it = try sys.outbox.flush(arena);
         while (it.next()) |pkt| {
             const conn = self.conns.get(pkt.recipient) orelse continue;
             try conn.write(pkt.body);
