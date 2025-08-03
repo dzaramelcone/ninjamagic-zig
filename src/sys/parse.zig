@@ -60,7 +60,7 @@ const Say = struct {
         return if (trimmed.len == 0)
             error.NothingSaid
         else
-            .{ .Say = .{ .source = source, .text = trimmed, .reach = .Sight } };
+            .{ .Emit = .{ .Say = .{ .source = source, .text = trimmed, .reach = .Sight } } };
     }
 };
 
@@ -122,7 +122,7 @@ test "basic verbs and error cases" {
     try std.testing.expectEqualDeep(parse(.{
         .user = 0,
         .text = "'north ",
-    }), Signal{ .Say = .{ .source = 0, .text = "north", .reach = .Sight } });
+    }), Signal{ .Emit = .{ .Say = .{ .source = 0, .text = "north", .reach = .Sight } } });
 
     try raises(error.NothingSaid, parse(.{ .user = 0, .text = "'" }));
     try raises(error.NothingSaid, parse(.{ .user = 0, .text = "' " }));
