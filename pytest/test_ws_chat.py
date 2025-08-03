@@ -1,25 +1,31 @@
-from uuid import uuid4
 import pytest
 from conftest import WS_URL
 import websockets
+import asyncio
 
 @pytest.mark.asyncio
-async def test_client_has_good_ping() -> None:
-    alice = await websockets.connect(WS_URL)
-    assert await alice.ping()
-    await alice.close()
+async def test_solo_client(golden) -> None:
+    async with asyncio.timeout(1):
+        alice = await websockets.connect(WS_URL)
+        assert await alice.ping()
+        await alice.send("asfkld")
+        assert golden(await alice.recv())
+        await alice.send("\'")
+        assert golden(await alice.recv())
+        await alice.close()
 
 
 @pytest.mark.asyncio
-async def test_chat():
+async def test_chat(golden):
     alice, bob = await websockets.connect(WS_URL), await websockets.connect(WS_URL)
-    await alice.send("say hi")
-    assert await alice.recv() == "You say, \'hi\'"
-    assert await bob.recv() == "Alice says, \'hi\'"
+    async with asyncio.timeout(1):
+        await alice.send("say hi")
+        assert golden(await alice.recv())
+        assert golden(await bob.recv())
     
-    await bob.send("\'hello")
-    assert await alice.recv() == "Bob says, \'hello\'"
-    assert await bob.recv() == "You say, \'hello\'"
+        await bob.send("\'hello")
+        assert golden(await alice.recv())
+        assert golden(await bob.recv())
 
-    await alice.close()
-    await bob.close()
+        await alice.close()
+        await bob.close()

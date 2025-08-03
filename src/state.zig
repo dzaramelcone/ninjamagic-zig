@@ -59,15 +59,26 @@ pub const State = struct {
 
     pub fn onMessage(self: *State, user: usize, msg: []const u8) !void {
         const sig = sys.parser.parse(.{ .user = user, .text = msg }) catch |err| {
-            switch (err) {
-                error.NothingSent => return,
-                else => try self.conns.get(user).?.write(sys.parser.toPlayer(err)),
-            }
+            handleParseError(user, err);
             return;
         };
         if (!self.channel.push(sig)) return error.ServerBacklogged;
     }
-
+    fn handleParseError(user: usize, err: sys.parser.ParseError) void {
+        switch (err) {
+            error.NothingSent => return,
+            else => core.bus.enqueue(
+                .{
+                    .Outbound = .{
+                        .Message = .{ .to = user, .text = sys.parser.toPlayer(err) },
+                    },
+                },
+            ) catch |appendError| switch (appendError) {
+                error.Full => return,
+                else => unreachable,
+            },
+        }
+    }
     pub fn onConnect(self: *State, id: usize, c: *ws.Conn) !void {
         try self.conns.put(id, c);
     }
