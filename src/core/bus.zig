@@ -67,7 +67,6 @@ pub fn enqueue(signal: sig.Signal) AppendError!void {
     switch (signal) {
         .Walk => |v| try walk.append(v),
         .Look => |v| try look.append(v),
-        .Say => |v| try say.append(v),
         .Attack => |v| try attack.append(v),
         .Move => |v| try move.append(v),
         .Emit => |v| try emit.append(v),
