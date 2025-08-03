@@ -60,7 +60,7 @@ const Say = struct {
         return if (trimmed.len == 0)
             error.NothingSaid
         else
-            .{ .Say = .{ .source = source, .text = trimmed } };
+            .{ .Say = .{ .source = source, .text = trimmed, .reach = .Sight } };
     }
 };
 
@@ -115,14 +115,14 @@ const parsers = .{
     NW,
 };
 const raises = std.testing.expectError;
-test "parser – basic verbs and error cases" {
+test "basic verbs and error cases" {
     try raises(error.NothingSent, parse(.{ .user = 0, .text = "" }));
     try raises(error.UnknownVerb, parse(.{ .user = 0, .text = "foobar" }));
 
     try std.testing.expectEqualDeep(parse(.{
         .user = 0,
         .text = "'north ",
-    }), Signal{ .Say = .{ .source = 0, .text = "north" } });
+    }), Signal{ .Say = .{ .source = 0, .text = "north", .reach = .Sight } });
 
     try raises(error.NothingSaid, parse(.{ .user = 0, .text = "'" }));
     try raises(error.NothingSaid, parse(.{ .user = 0, .text = "' " }));

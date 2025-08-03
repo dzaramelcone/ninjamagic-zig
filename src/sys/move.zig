@@ -49,7 +49,7 @@ pub fn step() void {
     var it = core.bus.walk.flush() catch return;
     while (it.next()) |w| {
         const event = walk(w.*) catch |err| {
-            core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .source = w.mob, .text = toPlayer(err) } } }) catch continue;
+            core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .to = w.source, .text = toPlayer(err) } } }) catch continue;
             continue;
         };
         core.bus.enqueue(.{ .Move = event }) catch continue;
