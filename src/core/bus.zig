@@ -55,19 +55,13 @@ fn Topic(comptime T: type, N: usize) type {
 
 // asked community about avoiding this boilerplate by writing metaprogramming/comptime struct def but it didnt go anywhere.
 // its something like comptime pub fn blah blah. Living with the boilerplate for now.
-const WalkTopic = Topic(sig.Walk, DEFAULT_SZ);
-const LookTopic = Topic(sig.Look, DEFAULT_SZ);
-const SayTopic = Topic(sig.Say, DEFAULT_SZ);
-const AttackTopic = Topic(sig.Attack, DEFAULT_SZ);
-const MoveTopic = Topic(sig.Move, DEFAULT_SZ);
-const OutboundTopic = Topic(sig.Outbound, 256);
-
-pub var walk: WalkTopic = .{};
-pub var look: LookTopic = .{};
-pub var say: SayTopic = .{};
-pub var attack: AttackTopic = .{};
-pub var move: MoveTopic = .{};
-pub var outbound: OutboundTopic = .{};
+pub var walk: Topic(sig.Walk, DEFAULT_SZ) = .{};
+pub var look: Topic(sig.Look, DEFAULT_SZ) = .{};
+pub var say: Topic(sig.Say, DEFAULT_SZ) = .{};
+pub var attack: Topic(sig.Attack, DEFAULT_SZ) = .{};
+pub var move: Topic(sig.Move, DEFAULT_SZ) = .{};
+pub var emit: Topic(sig.Emit, DEFAULT_SZ) = .{};
+pub var outbound: Topic(sig.Outbound, 256) = .{};
 
 pub fn enqueue(signal: sig.Signal) AppendError!void {
     switch (signal) {
@@ -76,12 +70,13 @@ pub fn enqueue(signal: sig.Signal) AppendError!void {
         .Say => |v| try say.append(v),
         .Attack => |v| try attack.append(v),
         .Move => |v| try move.append(v),
+        .Emit => |v| try emit.append(v),
         .Outbound => |v| try outbound.append(v),
     }
 }
 
 test "bus read/write" {
-    try walk.append(sig.Walk{ .source = 1, .dir = .north });
+    try enqueue(.{ .Walk = .{ .source = 1, .dir = .north } });
 
     var it = try walk.flush();
     try std.testing.expect(it.next() != null);
