@@ -121,11 +121,7 @@ fn walk_helper(p: Position, dir: core.Cardinal, w: usize, h: usize, wraps: bool)
 }
 
 test "system – directional walk validates blocked/out-of-bounds" {
-    const raises = std.testing.expectError;
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const A = gpa.allocator();
-    try init(A);
+    try init(std.testing.allocator);
     defer deinit();
     try place(1, .{ .lvl_key = 0, .x = 1, .y = 1 });
 
@@ -134,35 +130,30 @@ test "system – directional walk validates blocked/out-of-bounds" {
     try std.testing.expectEqual(2, outb.move_to.x);
     try std.testing.expectEqual(1, outb.move_to.y);
 
-    try raises(
+    try std.testing.expectError(
         MovementError.DestinationCollision,
         walk(.{ .source = 1, .dir = .north }),
     );
-    try raises(
+    try std.testing.expectError(
         MovementError.MobNotFound,
         walk(.{ .source = 999, .dir = .south }),
     );
-    try raises(
+    try std.testing.expectError(
         PlacementError.MobUniqueViolation,
         place(1, .{ .lvl_key = 0, .x = 1, .y = 1 }),
     );
-    try raises(
+    try std.testing.expectError(
         PlacementError.PositionOutOfBounds,
         place(2, .{ .lvl_key = 0, .x = 0, .y = 200 }),
     );
-    try raises(
+    try std.testing.expectError(
         PlacementError.LevelNotFound,
         place(2, .{ .lvl_key = 20, .x = 1, .y = 1 }),
     );
 }
 
 test "system – directional walk wraps on wrapped levels" {
-    const raises = std.testing.expectError;
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const A = gpa.allocator();
-
-    try init(A);
+    try init(std.testing.allocator);
     defer deinit();
     // hack level to wrap
     levels.getPtr(0).?.wraps = true;
@@ -232,7 +223,7 @@ test "system – directional walk wraps on wrapped levels" {
 
     // collision after wrap: south from (2,0) wraps to (2,9) which is a wall
     try set(1, .{ .lvl_key = 0, .x = 2, .y = 0 });
-    try raises(
+    try std.testing.expectError(
         MovementError.DestinationCollision,
         walk(.{ .source = 1, .dir = .south }),
     );

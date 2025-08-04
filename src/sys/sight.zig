@@ -71,11 +71,7 @@ pub fn step() void {
 }
 
 test "sight.step emits symmetrical In/Out events" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const A = gpa.allocator();
-
-    try move.init(A);
+    try move.init(std.testing.allocator);
     defer move.deinit();
 
     try move.place(1, .{ .lvl_key = 0, .x = 0, .y = 0 });

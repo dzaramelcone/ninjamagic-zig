@@ -58,9 +58,7 @@ pub fn step(now: core.Seconds) void {
 }
 
 test "single event fires at end time" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    init(gpa.allocator());
+    init(std.testing.allocator);
     defer deinit();
 
     // schedule action that should fire at t = 10

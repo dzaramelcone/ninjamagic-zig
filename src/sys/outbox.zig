@@ -73,18 +73,13 @@ pub const OutIter = struct {
     }
 };
 test "render compact JSON, bundle packets" {
-    var outb = &core.bus.outbound;
-
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const A = gpa.allocator();
-    var arena_allocator = std.heap.ArenaAllocator.init(A);
+    var arena_allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
-    try outb.append(.{ .Message = .{ .to = 1, .text = "foo" } });
-    try outb.append(.{ .Message = .{ .to = 1, .text = "bar" } });
-    try outb.append(.{ .Message = .{ .to = 2, .text = "baz" } });
+    try core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .to = 1, .text = "foo" } } });
+    try core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .to = 1, .text = "bar" } } });
+    try core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .to = 2, .text = "baz" } } });
 
     var seen1 = false;
     var seen2 = false;
@@ -92,7 +87,7 @@ test "render compact JSON, bundle packets" {
     var it = try flush(arena);
     while (it.next()) |pkt| {
         const Envelope = struct { msgs: []const Payload };
-        const env = try std.json.parseFromSlice(Envelope, A, pkt.body, .{});
+        const env = try std.json.parseFromSlice(Envelope, arena, pkt.body, .{});
         defer env.deinit();
 
         const msgs = env.value.msgs;
@@ -113,5 +108,5 @@ test "render compact JSON, bundle packets" {
     }
 
     try std.testing.expect(seen1 and seen2);
-    try std.testing.expectEqual(0, outb.count);
+    try std.testing.expectEqual(0, core.bus.outbound.count);
 }

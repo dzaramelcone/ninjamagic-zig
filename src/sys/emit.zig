@@ -50,15 +50,12 @@ fn handleSay(em: core.sig.Emit, alloc: std.mem.Allocator) !void {
 }
 
 test "say emits correct packets for sight-based reach" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const A = gpa.allocator();
-    var arena_allocator = std.heap.ArenaAllocator.init(A);
+    var arena_allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
 
-    try move.init(A);
-    name.init(A);
+    try move.init(std.testing.allocator);
+    name.init(std.testing.allocator);
     defer name.deinit();
     defer move.deinit();
 
