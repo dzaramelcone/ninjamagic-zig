@@ -11,7 +11,7 @@ pub const Channel = @import("channel.zig").Channel;
 pub const sig = @import("sig.zig");
 pub const zts = @import("zts.zig");
 pub const bus = @import("bus.zig");
-pub const TempAllocator = @import("TempAllocator.zig");
+
 test {
     @import("std").testing.refAllDecls(@This());
 }
