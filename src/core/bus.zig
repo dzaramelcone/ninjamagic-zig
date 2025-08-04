@@ -57,7 +57,6 @@ fn Topic(comptime T: type, N: usize) type {
 // its something like comptime pub fn blah blah. Living with the boilerplate for now.
 pub var walk: Topic(sig.Walk, DEFAULT_SZ) = .{};
 pub var look: Topic(sig.Look, DEFAULT_SZ) = .{};
-pub var say: Topic(sig.Say, DEFAULT_SZ) = .{};
 pub var attack: Topic(sig.Attack, DEFAULT_SZ) = .{};
 pub var move: Topic(sig.Move, DEFAULT_SZ) = .{};
 pub var emit: Topic(sig.Emit, DEFAULT_SZ) = .{};
