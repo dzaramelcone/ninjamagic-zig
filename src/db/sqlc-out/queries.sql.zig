@@ -1,37 +1,33 @@
 // Generated with sqlc v1.29.0
-
+ 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const pg = @import("pg");
+const zqlite = @import("zqlite");
 const models = @import("models.zig");
 
-pub const ConnQuerier = Querier(*pg.Conn);
-pub const PoolQuerier = Querier(*pg.Pool);
+pub const ConnQuerier = Querier(zqlite.Conn);
+pub const PoolQuerier = Querier(*zqlite.Pool);
 
 pub fn Querier(comptime T: type) type {
-    return struct {
+    return struct{
         const Self = @This();
-
+        
         allocator: Allocator,
         conn: T,
 
         pub fn init(allocator: Allocator, conn: T) Self {
             return .{ .allocator = allocator, .conn = conn };
         }
-
-        const create_user_sql =
+        
+        const create_user_sql = 
             \\INSERT INTO users (
             \\    name, 
             \\    email, 
             \\    password, 
-            \\    role, 
-            \\    ip_address,
-            \\    salary,
-            \\    created_at,
-            \\    updated_at
+            \\    salary
             \\) VALUES (
-            \\    $1, $2, $3, $4, $5, $6, NOW(), NOW()
+            \\    ?, ?, ?, ?
             \\)
         ;
 
@@ -39,95 +35,66 @@ pub fn Querier(comptime T: type) type {
             name: []const u8,
             email: []const u8,
             password: []const u8,
-            role: models.UserRole,
-            ip_address: ?[]const u8 = null,
             salary: ?f64 = null,
         };
 
         pub fn createUser(self: Self, create_user_params: CreateUserParams) !void {
-            var conn: *pg.Conn = blk: {
-                if (T == *pg.Pool) {
-                    break :blk try self.conn.acquire();
+            var conn: zqlite.Conn = blk: {
+                if (T == *zqlite.Pool) {
+                    break :blk self.conn.acquire();
                 } else {
                     break :blk self.conn;
                 }
             };
-            defer if (T == *pg.Pool) {
-                self.conn.release(conn);
+            defer if (T == *zqlite.Pool) {
+                conn.release();
             };
-            _ = try conn.exec(create_user_sql, .{
+
+            try conn.exec(create_user_sql, .{ 
                 create_user_params.name,
                 create_user_params.email,
                 create_user_params.password,
-                create_user_params.role,
-                create_user_params.ip_address,
                 create_user_params.salary,
             });
         }
 
-        const get_user_sql =
-            \\SELECT id, name, email, password, role, ip_address, salary, notes, created_at, updated_at, archived_at FROM users
-            \\WHERE id = $1 LIMIT 1
+        const get_user_sql = 
+            \\SELECT id, name, email, password, salary, notes, created_at, updated_at, archived_at FROM users
+            \\WHERE id = ? LIMIT 1
         ;
 
-        pub fn getUser(self: Self, id: i32) !models.User {
+        pub fn getUser(self: Self, id: i64) !models.User {
             const allocator = self.allocator;
-            var conn: *pg.Conn = blk: {
-                if (T == *pg.Pool) {
-                    break :blk try self.conn.acquire();
+            var conn: zqlite.Conn = blk: {
+                if (T == *zqlite.Pool) {
+                    break :blk self.conn.acquire();
                 } else {
                     break :blk self.conn;
                 }
             };
-            defer if (T == *pg.Pool) {
-                self.conn.release(conn);
+            defer if (T == *zqlite.Pool) {
+                conn.release();
             };
-            const result = try conn.query(get_user_sql, .{
+
+            var rows = try conn.rows(get_user_sql, .{ 
                 id,
             });
-            defer result.deinit();
-            const row = try result.next() orelse return error.NotFound;
+            defer rows.deinit();
+            if (rows.err) |err| {
+                return err;
+            }
+            const row = rows.next() orelse return error.NotFound;
 
-            const row_id = row.get(i32, 0);
-            const row_name = try allocator.dupe(u8, row.get([]const u8, 1));
+            const row_id = row.int(0);
+            const row_name = try allocator.dupe(u8, row.text(1));
             errdefer allocator.free(row_name);
-            const row_email = try allocator.dupe(u8, row.get([]const u8, 2));
+            const row_email = try allocator.dupe(u8, row.text(2));
             errdefer allocator.free(row_email);
-            const row_password = try allocator.dupe(u8, row.get([]const u8, 3));
+            const row_password = try allocator.dupe(u8, row.text(3));
             errdefer allocator.free(row_password);
-            const row_role = row.get(models.UserRole, 4);
-            const ip_address_cidr = row.get(?pg.Cidr, 5);
-            const row_ip_address: ?pg.Cidr = blk: {
-                if (ip_address_cidr) |cidr| {
-                    break :blk pg.Cidr{
-                        .address = try allocator.dupe(u8, cidr.address),
-                        .netmask = cidr.netmask,
-                        .family = cidr.family,
-                    };
-                }
-                break :blk null;
-            };
-            errdefer if (row_ip_address) |cidr| {
-                allocator.free(cidr.address);
-            };
-            const salary_numeric = row.get(?pg.Numeric, 6);
-            const row_salary: ?pg.Numeric = blk: {
-                if (salary_numeric) |numeric| {
-                    break :blk pg.Numeric{
-                        .number_of_digits = numeric.number_of_digits,
-                        .weight = numeric.weight,
-                        .sign = numeric.sign,
-                        .scale = numeric.scale,
-                        .digits = try allocator.dupe(u8, numeric.digits),
-                    };
-                }
-                break :blk null;
-            };
-            errdefer if (row_salary) |numeric| {
-                allocator.free(numeric.digits);
-            };
+            const row_salary = row.nullableFloat(4);
 
-            const maybe_notes = row.get(?[]const u8, 7);
+            const maybe_notes = row.nullableText(5);
             const row_notes: ?[]const u8 = blk: {
                 if (maybe_notes) |field| {
                     break :blk try allocator.dupe(u8, field);
@@ -137,9 +104,9 @@ pub fn Querier(comptime T: type) type {
             errdefer if (row_notes) |field| {
                 allocator.free(field);
             };
-            const row_created_at = row.get(i64, 8);
-            const row_updated_at = row.get(i64, 9);
-            const row_archived_at = row.get(?i64, 10);
+            const row_created_at = row.int(6);
+            const row_updated_at = row.int(7);
+            const row_archived_at = row.nullableInt(8);
 
             return .{
                 .__allocator = allocator,
@@ -147,8 +114,6 @@ pub fn Querier(comptime T: type) type {
                 .name = row_name,
                 .email = row_email,
                 .password = row_password,
-                .role = row_role,
-                .ip_address = row_ip_address,
                 .salary = row_salary,
                 .notes = row_notes,
                 .created_at = row_created_at,
@@ -157,69 +122,43 @@ pub fn Querier(comptime T: type) type {
             };
         }
 
-        const get_user_by_email_sql =
-            \\SELECT id, name, email, password, role, ip_address, salary, notes, created_at, updated_at, archived_at FROM users
-            \\WHERE email = $1 LIMIT 1
+        const get_user_by_email_sql = 
+            \\SELECT id, name, email, password, salary, notes, created_at, updated_at, archived_at FROM users
+            \\WHERE email = ? LIMIT 1
         ;
 
         pub fn getUserByEmail(self: Self, email: []const u8) !models.User {
             const allocator = self.allocator;
-            var conn: *pg.Conn = blk: {
-                if (T == *pg.Pool) {
-                    break :blk try self.conn.acquire();
+            var conn: zqlite.Conn = blk: {
+                if (T == *zqlite.Pool) {
+                    break :blk self.conn.acquire();
                 } else {
                     break :blk self.conn;
                 }
             };
-            defer if (T == *pg.Pool) {
-                self.conn.release(conn);
+            defer if (T == *zqlite.Pool) {
+                conn.release();
             };
-            const result = try conn.query(get_user_by_email_sql, .{
+
+            var rows = try conn.rows(get_user_by_email_sql, .{ 
                 email,
             });
-            defer result.deinit();
-            const row = try result.next() orelse return error.NotFound;
+            defer rows.deinit();
+            if (rows.err) |err| {
+                return err;
+            }
+            const row = rows.next() orelse return error.NotFound;
 
-            const row_id = row.get(i32, 0);
-            const row_name = try allocator.dupe(u8, row.get([]const u8, 1));
+            const row_id = row.int(0);
+            const row_name = try allocator.dupe(u8, row.text(1));
             errdefer allocator.free(row_name);
-            const row_email = try allocator.dupe(u8, row.get([]const u8, 2));
+            const row_email = try allocator.dupe(u8, row.text(2));
             errdefer allocator.free(row_email);
-            const row_password = try allocator.dupe(u8, row.get([]const u8, 3));
+            const row_password = try allocator.dupe(u8, row.text(3));
             errdefer allocator.free(row_password);
-            const row_role = row.get(models.UserRole, 4);
-            const ip_address_cidr = row.get(?pg.Cidr, 5);
-            const row_ip_address: ?pg.Cidr = blk: {
-                if (ip_address_cidr) |cidr| {
-                    break :blk pg.Cidr{
-                        .address = try allocator.dupe(u8, cidr.address),
-                        .netmask = cidr.netmask,
-                        .family = cidr.family,
-                    };
-                }
-                break :blk null;
-            };
-            errdefer if (row_ip_address) |cidr| {
-                allocator.free(cidr.address);
-            };
-            const salary_numeric = row.get(?pg.Numeric, 6);
-            const row_salary: ?pg.Numeric = blk: {
-                if (salary_numeric) |numeric| {
-                    break :blk pg.Numeric{
-                        .number_of_digits = numeric.number_of_digits,
-                        .weight = numeric.weight,
-                        .sign = numeric.sign,
-                        .scale = numeric.scale,
-                        .digits = try allocator.dupe(u8, numeric.digits),
-                    };
-                }
-                break :blk null;
-            };
-            errdefer if (row_salary) |numeric| {
-                allocator.free(numeric.digits);
-            };
+            const row_salary = row.nullableFloat(4);
 
-            const maybe_notes = row.get(?[]const u8, 7);
+            const maybe_notes = row.nullableText(5);
             const row_notes: ?[]const u8 = blk: {
                 if (maybe_notes) |field| {
                     break :blk try allocator.dupe(u8, field);
@@ -229,9 +168,9 @@ pub fn Querier(comptime T: type) type {
             errdefer if (row_notes) |field| {
                 allocator.free(field);
             };
-            const row_created_at = row.get(i64, 8);
-            const row_updated_at = row.get(i64, 9);
-            const row_archived_at = row.get(?i64, 10);
+            const row_created_at = row.int(6);
+            const row_updated_at = row.int(7);
+            const row_archived_at = row.nullableInt(8);
 
             return .{
                 .__allocator = allocator,
@@ -239,8 +178,6 @@ pub fn Querier(comptime T: type) type {
                 .name = row_name,
                 .email = row_email,
                 .password = row_password,
-                .role = row_role,
-                .ip_address = row_ip_address,
                 .salary = row_salary,
                 .notes = row_notes,
                 .created_at = row_created_at,
@@ -249,137 +186,126 @@ pub fn Querier(comptime T: type) type {
             };
         }
 
-        const get_user_salaries_sql =
-            \\SELECT id, email, salary FROM users
-            \\WHERE salary >= $1 AND salary <= $2
+        const get_user_emails_sql = 
+            \\SELECT id, email FROM users
+            \\ORDER BY id ASC
         ;
 
-        pub const GetUserSalariesRow = struct {
+        pub const GetUserEmailsRow = struct {
             __allocator: Allocator,
 
-            id: i32,
+            id: i64,
             email: []const u8,
-            salary: ?pg.Numeric = null,
 
-            pub fn deinit(self: *const GetUserSalariesRow) void {
+            pub fn deinit(self: *const GetUserEmailsRow) void {
                 self.__allocator.free(self.email);
-                if (self.salary) |field| {
-                    self.__allocator.free(field.digits);
-                }
             }
         };
 
-        pub fn getUserSalaries(self: Self, minimum: f64, maximum: f64) ![]GetUserSalariesRow {
+        pub fn getUserEmails(self: Self) ![]GetUserEmailsRow {
             const allocator = self.allocator;
-            var conn: *pg.Conn = blk: {
-                if (T == *pg.Pool) {
-                    break :blk try self.conn.acquire();
+            var conn: zqlite.Conn = blk: {
+                if (T == *zqlite.Pool) {
+                    break :blk self.conn.acquire();
                 } else {
                     break :blk self.conn;
                 }
             };
-            defer if (T == *pg.Pool) {
-                self.conn.release(conn);
+            defer if (T == *zqlite.Pool) {
+                conn.release();
             };
-            const result = try conn.query(get_user_salaries_sql, .{
-                minimum,
-                maximum,
-            });
-            defer result.deinit();
-            var out = std.ArrayList(GetUserSalariesRow).init(allocator);
+
+            var rows = try conn.rows(get_user_emails_sql, .{});
+            defer rows.deinit();
+            var out = std.ArrayList(GetUserEmailsRow).init(allocator);
             defer out.deinit();
-            while (try result.next()) |row| {
-                const row_id = row.get(i32, 0);
-                const row_email = try allocator.dupe(u8, row.get([]const u8, 1));
+            while (rows.next()) |row| {
+                const row_id = row.int(0);
+                const row_email = try allocator.dupe(u8, row.text(1));
                 errdefer allocator.free(row_email);
-                const salary_numeric = row.get(?pg.Numeric, 2);
-                const row_salary: ?pg.Numeric = blk: {
-                    if (salary_numeric) |numeric| {
-                        break :blk pg.Numeric{
-                            .number_of_digits = numeric.number_of_digits,
-                            .weight = numeric.weight,
-                            .sign = numeric.sign,
-                            .scale = numeric.scale,
-                            .digits = try allocator.dupe(u8, numeric.digits),
-                        };
-                    }
-                    break :blk null;
-                };
-                errdefer if (row_salary) |numeric| {
-                    allocator.free(numeric.digits);
-                };
                 try out.append(.{
                     .__allocator = allocator,
                     .id = row_id,
                     .email = row_email,
-                    .salary = row_salary,
                 });
+            }
+            if (rows.err) |err| {
+                return err;
             }
 
             return try out.toOwnedSlice();
         }
 
-        const get_users_sql =
-            \\SELECT id, name, email, password, role, ip_address, salary, notes, created_at, updated_at, archived_at FROM users
+        const get_user_i_ds_by_salary_range_sql = 
+            \\SELECT id FROM users
+            \\WHERE salary >= ? AND salary <= ?
+            \\ORDER BY id ASC
+        ;
+
+        pub fn getUserIDsBySalaryRange(self: Self, salary_1: f64, salary_2: f64) ![]i64 {
+            const allocator = self.allocator;
+            var conn: zqlite.Conn = blk: {
+                if (T == *zqlite.Pool) {
+                    break :blk self.conn.acquire();
+                } else {
+                    break :blk self.conn;
+                }
+            };
+            defer if (T == *zqlite.Pool) {
+                conn.release();
+            };
+
+            var rows = try conn.rows(get_user_i_ds_by_salary_range_sql, .{ 
+                salary_1,
+                salary_2,
+            });
+            defer rows.deinit();
+            var out = std.ArrayList(i64).init(allocator);
+            defer out.deinit();
+            while (rows.next()) |row| {
+                const row_id = row.int(0);
+                try out.append(row_id);
+            }
+            if (rows.err) |err| {
+                return err;
+            }
+
+            return try out.toOwnedSlice();
+        }
+
+        const get_users_sql = 
+            \\SELECT id, name, email, password, salary, notes, created_at, updated_at, archived_at FROM users
+            \\ORDER BY id ASC
         ;
 
         pub fn getUsers(self: Self) ![]models.User {
             const allocator = self.allocator;
-            var conn: *pg.Conn = blk: {
-                if (T == *pg.Pool) {
-                    break :blk try self.conn.acquire();
+            var conn: zqlite.Conn = blk: {
+                if (T == *zqlite.Pool) {
+                    break :blk self.conn.acquire();
                 } else {
                     break :blk self.conn;
                 }
             };
-            defer if (T == *pg.Pool) {
-                self.conn.release(conn);
+            defer if (T == *zqlite.Pool) {
+                conn.release();
             };
-            const result = try conn.query(get_users_sql, .{});
-            defer result.deinit();
+
+            var rows = try conn.rows(get_users_sql, .{});
+            defer rows.deinit();
             var out = std.ArrayList(models.User).init(allocator);
             defer out.deinit();
-            while (try result.next()) |row| {
-                const row_id = row.get(i32, 0);
-                const row_name = try allocator.dupe(u8, row.get([]const u8, 1));
+            while (rows.next()) |row| {
+                const row_id = row.int(0);
+                const row_name = try allocator.dupe(u8, row.text(1));
                 errdefer allocator.free(row_name);
-                const row_email = try allocator.dupe(u8, row.get([]const u8, 2));
+                const row_email = try allocator.dupe(u8, row.text(2));
                 errdefer allocator.free(row_email);
-                const row_password = try allocator.dupe(u8, row.get([]const u8, 3));
+                const row_password = try allocator.dupe(u8, row.text(3));
                 errdefer allocator.free(row_password);
-                const row_role = row.get(models.UserRole, 4);
-                const ip_address_cidr = row.get(?pg.Cidr, 5);
-                const row_ip_address: ?pg.Cidr = blk: {
-                    if (ip_address_cidr) |cidr| {
-                        break :blk pg.Cidr{
-                            .address = try allocator.dupe(u8, cidr.address),
-                            .netmask = cidr.netmask,
-                            .family = cidr.family,
-                        };
-                    }
-                    break :blk null;
-                };
-                errdefer if (row_ip_address) |cidr| {
-                    allocator.free(cidr.address);
-                };
-                const salary_numeric = row.get(?pg.Numeric, 6);
-                const row_salary: ?pg.Numeric = blk: {
-                    if (salary_numeric) |numeric| {
-                        break :blk pg.Numeric{
-                            .number_of_digits = numeric.number_of_digits,
-                            .weight = numeric.weight,
-                            .sign = numeric.sign,
-                            .scale = numeric.scale,
-                            .digits = try allocator.dupe(u8, numeric.digits),
-                        };
-                    }
-                    break :blk null;
-                };
-                errdefer if (row_salary) |numeric| {
-                    allocator.free(numeric.digits);
-                };
+                const row_salary = row.nullableFloat(4);
 
-                const maybe_notes = row.get(?[]const u8, 7);
+                const maybe_notes = row.nullableText(5);
                 const row_notes: ?[]const u8 = blk: {
                     if (maybe_notes) |field| {
                         break :blk try allocator.dupe(u8, field);
@@ -389,17 +315,15 @@ pub fn Querier(comptime T: type) type {
                 errdefer if (row_notes) |field| {
                     allocator.free(field);
                 };
-                const row_created_at = row.get(i64, 8);
-                const row_updated_at = row.get(i64, 9);
-                const row_archived_at = row.get(?i64, 10);
+                const row_created_at = row.int(6);
+                const row_updated_at = row.int(7);
+                const row_archived_at = row.nullableInt(8);
                 try out.append(.{
                     .__allocator = allocator,
                     .id = row_id,
                     .name = row_name,
                     .email = row_email,
                     .password = row_password,
-                    .role = row_role,
-                    .ip_address = row_ip_address,
                     .salary = row_salary,
                     .notes = row_notes,
                     .created_at = row_created_at,
@@ -407,103 +331,12 @@ pub fn Querier(comptime T: type) type {
                     .archived_at = row_archived_at,
                 });
             }
-
-            return try out.toOwnedSlice();
-        }
-
-        const get_users_by_role_sql =
-            \\SELECT id, name, email, password, role, ip_address, salary, notes, created_at, updated_at, archived_at FROM users
-            \\WHERE role = $1
-        ;
-
-        pub fn getUsersByRole(self: Self, role: models.UserRole) ![]models.User {
-            const allocator = self.allocator;
-            var conn: *pg.Conn = blk: {
-                if (T == *pg.Pool) {
-                    break :blk try self.conn.acquire();
-                } else {
-                    break :blk self.conn;
-                }
-            };
-            defer if (T == *pg.Pool) {
-                self.conn.release(conn);
-            };
-            const result = try conn.query(get_users_by_role_sql, .{
-                role,
-            });
-            defer result.deinit();
-            var out = std.ArrayList(models.User).init(allocator);
-            defer out.deinit();
-            while (try result.next()) |row| {
-                const row_id = row.get(i32, 0);
-                const row_name = try allocator.dupe(u8, row.get([]const u8, 1));
-                errdefer allocator.free(row_name);
-                const row_email = try allocator.dupe(u8, row.get([]const u8, 2));
-                errdefer allocator.free(row_email);
-                const row_password = try allocator.dupe(u8, row.get([]const u8, 3));
-                errdefer allocator.free(row_password);
-                const row_role = row.get(models.UserRole, 4);
-                const ip_address_cidr = row.get(?pg.Cidr, 5);
-                const row_ip_address: ?pg.Cidr = blk: {
-                    if (ip_address_cidr) |cidr| {
-                        break :blk pg.Cidr{
-                            .address = try allocator.dupe(u8, cidr.address),
-                            .netmask = cidr.netmask,
-                            .family = cidr.family,
-                        };
-                    }
-                    break :blk null;
-                };
-                errdefer if (row_ip_address) |cidr| {
-                    allocator.free(cidr.address);
-                };
-                const salary_numeric = row.get(?pg.Numeric, 6);
-                const row_salary: ?pg.Numeric = blk: {
-                    if (salary_numeric) |numeric| {
-                        break :blk pg.Numeric{
-                            .number_of_digits = numeric.number_of_digits,
-                            .weight = numeric.weight,
-                            .sign = numeric.sign,
-                            .scale = numeric.scale,
-                            .digits = try allocator.dupe(u8, numeric.digits),
-                        };
-                    }
-                    break :blk null;
-                };
-                errdefer if (row_salary) |numeric| {
-                    allocator.free(numeric.digits);
-                };
-
-                const maybe_notes = row.get(?[]const u8, 7);
-                const row_notes: ?[]const u8 = blk: {
-                    if (maybe_notes) |field| {
-                        break :blk try allocator.dupe(u8, field);
-                    }
-                    break :blk null;
-                };
-                errdefer if (row_notes) |field| {
-                    allocator.free(field);
-                };
-                const row_created_at = row.get(i64, 8);
-                const row_updated_at = row.get(i64, 9);
-                const row_archived_at = row.get(?i64, 10);
-                try out.append(.{
-                    .__allocator = allocator,
-                    .id = row_id,
-                    .name = row_name,
-                    .email = row_email,
-                    .password = row_password,
-                    .role = row_role,
-                    .ip_address = row_ip_address,
-                    .salary = row_salary,
-                    .notes = row_notes,
-                    .created_at = row_created_at,
-                    .updated_at = row_updated_at,
-                    .archived_at = row_archived_at,
-                });
+            if (rows.err) |err| {
+                return err;
             }
 
             return try out.toOwnedSlice();
         }
+
     };
 }

@@ -1,32 +1,30 @@
 -- name: GetUsers :many
-SELECT * FROM users;
+SELECT * FROM users
+ORDER BY id ASC;
+
+-- name: GetUserEmails :many
+SELECT id, email FROM users
+ORDER BY id ASC;
 
 -- name: GetUser :one
 SELECT * FROM users
-WHERE id = $1 LIMIT 1;
+WHERE id = ? LIMIT 1;
 
 -- name: GetUserByEmail :one
 SELECT * FROM users
-WHERE email = $1 LIMIT 1;
+WHERE email = ? LIMIT 1;
 
--- name: GetUsersByRole :many
-SELECT * FROM users
-WHERE role = $1;
-
--- name: GetUserSalaries :many
-SELECT id, email, salary FROM users
-WHERE salary >= sqlc.arg(minimum) AND salary <= sqlc.arg(maximum);
+-- name: GetUserIDsBySalaryRange :many
+SELECT id FROM users
+WHERE salary >= ? AND salary <= ?
+ORDER BY id ASC;
 
 -- name: CreateUser :exec
 INSERT INTO users (
     name, 
     email, 
     password, 
-    role, 
-    ip_address,
-    salary,
-    created_at,
-    updated_at
+    salary
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, NOW(), NOW()
+    ?, ?, ?, ?
 );
