@@ -1,9 +1,7 @@
-{
-  "msgs": [
-    {
-      "Msg": {
-        "m": "You say, 'hi'\n"
-      }
+[
+  {
+    "Msg": {
+      "m": "You say, 'hi'\n"
     }
-  ]
-}
+  }
+]

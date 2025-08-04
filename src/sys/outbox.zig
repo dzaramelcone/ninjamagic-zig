@@ -51,7 +51,7 @@ pub fn flush(alloc: std.mem.Allocator) !OutIter {
             msgs.append(structure(out)) catch @panic("OOM");
         }
 
-        const body = std.json.stringifyAlloc(alloc, .{ .msgs = msgs.items }, .{}) catch @panic("OOM");
+        const body = std.json.stringifyAlloc(alloc, msgs.items, .{}) catch @panic("OOM");
         packets.append(.{ .recipient = rid, .body = body }) catch @panic("OOM");
 
         i = j;
@@ -86,11 +86,10 @@ test "render compact JSON, bundle packets" {
 
     var it = try flush(arena);
     while (it.next()) |pkt| {
-        const Envelope = struct { msgs: []const Payload };
-        const env = try std.json.parseFromSlice(Envelope, arena, pkt.body, .{});
+        const env = try std.json.parseFromSlice([]const Payload, arena, pkt.body, .{});
         defer env.deinit();
 
-        const msgs = env.value.msgs;
+        const msgs = env.value;
         switch (pkt.recipient) {
             1 => {
                 seen1 = true;
