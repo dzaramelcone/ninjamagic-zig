@@ -2,3 +2,4 @@
 .zig-cache
 logs
 zig-out
+**/__pycache__

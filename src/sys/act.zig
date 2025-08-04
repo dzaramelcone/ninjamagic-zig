@@ -32,11 +32,11 @@ pub fn startAction(actor: usize, act: Action, now: core.Seconds, dur: core.Secon
     actions.put(actor, act) catch @panic("OOM");
 }
 
-var actions: std.AutoHashMap(usize, Action) = undefined;
+var actions: std.AutoArrayHashMap(usize, Action) = undefined;
 var events: std.PriorityQueue(Event, void, eventCmp) = undefined;
 
 pub fn init(alloc: std.mem.Allocator) void {
-    actions = std.AutoHashMap(usize, Action).init(alloc);
+    actions = std.AutoArrayHashMap(usize, Action).init(alloc);
     events = std.PriorityQueue(Event, void, eventCmp).init(alloc, undefined);
 }
 
@@ -58,9 +58,7 @@ pub fn step(now: core.Seconds) void {
 }
 
 test "single event fires at end time" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    init(gpa.allocator());
+    init(std.testing.allocator);
     defer deinit();
 
     // schedule action that should fire at t = 10

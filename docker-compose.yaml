@@ -56,3 +56,4 @@ services:
     profiles: ["test"]
     # depends_on: ["app"]
     command: python -m pytest
+    volumes: [./pytest:/repo/pytest]

@@ -10,7 +10,7 @@ pub const State = struct {
 
     now: core.Seconds,
 
-    conns: std.AutoHashMap(usize, *ws.Conn),
+    conns: std.AutoArrayHashMap(usize, *ws.Conn),
     channel: Channel,
 
     pub fn init(alloc: std.mem.Allocator) !State {
@@ -19,7 +19,7 @@ pub const State = struct {
         return .{
             .alloc = alloc,
             .now = 0,
-            .conns = std.AutoHashMap(usize, *ws.Conn).init(alloc),
+            .conns = std.AutoArrayHashMap(usize, *ws.Conn).init(alloc),
             .channel = Channel{},
         };
     }
@@ -31,7 +31,9 @@ pub const State = struct {
 
     pub fn step(self: *State, dt: core.Seconds) !void {
         self.now += dt;
-
+        var arena_allocator = std.heap.ArenaAllocator.init(self.alloc);
+        defer arena_allocator.deinit();
+        const arena = arena_allocator.allocator();
         // Pull messages off the queue.
         for (self.channel.flip()) |sig| {
             core.bus.enqueue(sig) catch continue;
@@ -43,8 +45,12 @@ pub const State = struct {
         // Handle moves.
         sys.move.step();
 
+        sys.sight.step();
+
+        try sys.emit.step(arena);
+
         // Send all pending packets to clients.
-        var it = try sys.outbox.flush(self.alloc);
+        var it = try sys.outbox.flush(arena);
         while (it.next()) |pkt| {
             const conn = self.conns.get(pkt.recipient) orelse continue;
             try conn.write(pkt.body);
@@ -52,13 +58,7 @@ pub const State = struct {
     }
 
     pub fn onMessage(self: *State, user: usize, msg: []const u8) !void {
-        const sig = sys.parser.parse(.{ .user = user, .text = msg }) catch |err| {
-            switch (err) {
-                error.NothingSent => return,
-                else => try self.conns.get(user).?.write(sys.parser.toPlayer(err)),
-            }
-            return;
-        };
+        const sig = sys.parser.parse(.{ .user = user, .text = msg }) catch return;
         if (!self.channel.push(sig)) return error.ServerBacklogged;
     }
 

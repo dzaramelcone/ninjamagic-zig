@@ -4,34 +4,41 @@ const Request = core.sig.Request;
 const Signal = core.sig.Signal;
 
 pub const ParseError = error{
-    NothingSent,
     NotYetImplemented,
     UnknownVerb,
     NothingSaid,
 };
 
-pub fn toPlayer(err: ParseError) []const u8 {
-    return switch (err) {
-        error.NothingSent => unreachable,
-        error.UnknownVerb => "Huh?",
-        error.NothingSaid => "You open your mouth, as if to speak.",
-        error.NotYetImplemented => "That feature isn't ready yet.",
+fn toPlayer(user: usize, err: ParseError) Signal {
+    return .{
+        .Outbound = .{
+            .Message = .{
+                .to = user,
+                .text = switch (err) {
+                    error.UnknownVerb => "Huh?",
+                    error.NothingSaid => "You open your mouth, as if to speak.",
+                    error.NotYetImplemented => "That feature isn't ready yet.",
+                },
+            },
+        },
     };
 }
 
-pub fn parse(req: Request) ParseError!Signal {
+pub fn parse(req: Request) error{NoInput}!Signal {
     const input = req.text;
     if (input.len > 0 and input[0] == '\'') {
-        return Say.parse(req.user, input[1..]);
+        return Say.parse(req.user, input[1..]) catch |err| toPlayer(req.user, err);
     }
 
     var tokens = std.mem.tokenizeScalar(u8, input, ' ');
-    const word = tokens.next() orelse return error.NothingSent;
-    inline for (parsers) |P| if (matches(P, word)) {
+    const first = tokens.next() orelse return error.NoInput;
+    const rest = if (req.text.len == first.len) "" else req.text[first.len + 1 ..];
+    inline for (parsers) |P| if (matches(P, first)) {
         ensureParser(P);
-        return P.parse(req.user, if (req.text.len == word.len) "" else req.text[word.len + 1 ..]);
+        return P.parse(req.user, rest) catch |err| toPlayer(req.user, err);
     };
-    return error.UnknownVerb;
+
+    return toPlayer(req.user, error.UnknownVerb);
 }
 
 fn matches(cmd: anytype, word: []const u8) bool {
@@ -60,7 +67,7 @@ const Say = struct {
         return if (trimmed.len == 0)
             error.NothingSaid
         else
-            .{ .Say = .{ .speaker = source, .text = trimmed } };
+            .{ .Emit = .{ .Say = .{ .source = source, .text = trimmed, .reach = .Sight } } };
     }
 };
 
@@ -88,7 +95,7 @@ fn Walk(comptime Verb: []const u8, comptime MinLen: usize, comptime Dir: core.Ca
         pub const dir = Dir;
 
         pub fn parse(source: usize, _: []const u8) !Signal {
-            return .{ .Walk = .{ .mob = source, .dir = dir } };
+            return .{ .Walk = .{ .source = source, .dir = dir } };
         }
     };
 }
@@ -114,36 +121,46 @@ const parsers = .{
     W,
     NW,
 };
-const raises = std.testing.expectError;
-test "parser – basic verbs and error cases" {
-    try raises(error.NothingSent, parse(.{ .user = 0, .text = "" }));
-    try raises(error.UnknownVerb, parse(.{ .user = 0, .text = "foobar" }));
+
+test "basic verbs and error cases" {
+    try std.testing.expectError(error.NoInput, parse(.{ .user = 0, .text = "" }));
+    try std.testing.expectEqualDeep(
+        try parse(.{ .user = 0, .text = "foobar" }),
+        Signal{ .Outbound = .{ .Message = .{ .to = 0, .text = "Huh?" } } },
+    );
 
     try std.testing.expectEqualDeep(parse(.{
         .user = 0,
         .text = "'north ",
-    }), Signal{ .Say = .{ .speaker = 0, .text = "north" } });
+    }), Signal{ .Emit = .{ .Say = .{ .source = 0, .text = "north", .reach = .Sight } } });
 
-    try raises(error.NothingSaid, parse(.{ .user = 0, .text = "'" }));
-    try raises(error.NothingSaid, parse(.{ .user = 0, .text = "' " }));
-    try raises(error.NothingSaid, parse(.{ .user = 0, .text = "say" }));
-    try raises(error.NothingSaid, parse(.{ .user = 0, .text = "say   " }));
-    try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "a" }));
-    try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "attack Bob" }));
-    try raises(error.NotYetImplemented, parse(.{ .user = 0, .text = "AtTaCk alice" }));
-    const cases = [_]struct { verb: []const u8, dir: core.Cardinal }{
+    const not_yet_implemented_cases = [_][]const u8{ "look", "a", "attack Bob", "AtTaCk alice" };
+    for (not_yet_implemented_cases) |txt| {
+        try std.testing.expectEqualDeep(
+            try parse(.{ .user = 0, .text = txt }),
+            Signal{ .Outbound = .{ .Message = .{ .to = 0, .text = "That feature isn't ready yet." } } },
+        );
+    }
+    const ur_quiet_cases = [_][]const u8{ "'", "' ", "say", "say   " };
+    for (ur_quiet_cases) |txt| {
+        try std.testing.expectEqualDeep(
+            try parse(.{ .user = 0, .text = txt }),
+            Signal{ .Outbound = .{ .Message = .{ .to = 0, .text = "You open your mouth, as if to speak." } } },
+        );
+    }
+    const walk_in_a_dir_cases = [_]struct { verb: []const u8, dir: core.Cardinal }{
         .{ .verb = "n", .dir = .north },
-        .{ .verb = "ne", .dir = .northeast },
-        .{ .verb = "e", .dir = .east },
+        .{ .verb = "Ne", .dir = .northeast },
+        .{ .verb = "e  ", .dir = .east },
         .{ .verb = "se", .dir = .southeast },
-        .{ .verb = "s", .dir = .south },
-        .{ .verb = "sw", .dir = .southwest },
+        .{ .verb = " s", .dir = .south },
+        .{ .verb = " sw ", .dir = .southwest },
         .{ .verb = "w", .dir = .west },
     };
-    for (cases) |case| {
+    for (walk_in_a_dir_cases) |case| {
         try std.testing.expectEqualDeep(parse(.{
             .user = 0,
             .text = case.verb,
-        }), Signal{ .Walk = .{ .mob = 0, .dir = case.dir } });
+        }), Signal{ .Walk = .{ .source = 0, .dir = case.dir } });
     }
 }

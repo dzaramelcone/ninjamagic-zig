@@ -38,7 +38,7 @@ pub const Level = struct {
     }
 
     pub fn inBounds(self: *const Level, x: usize, y: usize) bool {
-        return x >= 0 and y >= 0 and x < self.width and y < self.height;
+        return x < self.width and y < self.height;
     }
 
     pub fn tile(self: *const Level, x: usize, y: usize) Tile {

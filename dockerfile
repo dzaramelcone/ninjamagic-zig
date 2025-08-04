@@ -30,4 +30,4 @@ FROM python:alpine3.22 AS pytest
 WORKDIR repo
 COPY pytest/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY pytest/ .
+COPY ./pytest ./pytest

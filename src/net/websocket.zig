@@ -22,7 +22,6 @@ pub fn Handler(comptime T: type) type {
         }
 
         pub fn clientMessage(self: *@This(), raw: []const u8) !void {
-            try self.conn.write(raw);
             self.impl.onMessage(self.id, raw) catch |err| try self.conn.write(@errorName(err));
         }
 

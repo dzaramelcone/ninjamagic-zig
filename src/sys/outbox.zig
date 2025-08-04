@@ -3,62 +3,68 @@ const core = @import("core");
 const zts = core.zts;
 const Packet = struct { recipient: usize, body: []const u8 };
 
-fn getSource(outbound: core.sig.Outbound) usize {
+fn getRecipient(outbound: core.sig.Outbound) usize {
     return switch (outbound) {
-        .Message => |v| v.source,
-        .PosUpdate => |v| v.source,
+        .Message => |v| v.to,
+        .EntityInSight => |v| v.to,
+        .PosUpdate => |v| v.to,
+        .EntityOutOfSight => |v| v.to,
+    };
+}
+const Payload = union(enum) {
+    Msg: struct { m: []const u8 },
+    Pos: struct { id: usize, x: usize, y: usize },
+    See: struct { id: usize, x: usize, y: usize },
+    Out: struct { id: usize },
+};
+fn structure(out: core.sig.Outbound) Payload {
+    return switch (out) {
+        .Message => |v| .{ .Msg = .{ .m = v.text } },
+        .PosUpdate => |v| .{ .Pos = .{ .id = v.subj, .x = v.move_to.x, .y = v.move_to.y } },
+        .EntityInSight => |v| .{ .See = .{ .id = v.subj, .x = v.x, .y = v.y } },
+        .EntityOutOfSight => |v| .{ .Out = .{ .id = v.subj } },
     };
 }
 
+fn sort_sig_asc(_: void, lhs: core.sig.Outbound, rhs: core.sig.Outbound) bool {
+    return getRecipient(lhs) < getRecipient(rhs);
+}
 // Theoretical maximum allocated memory would be largest possible outbound message * static fifo size.
 // If we clip it to a reasonable packet frame, it would be about 4KiB per msg * 1024 = 4MiB,
 // so 16MiB per frame should be very conservative.
-pub fn flush(parent: std.mem.Allocator) !OutIter {
+pub fn flush(alloc: std.mem.Allocator) !OutIter {
     var outb = &core.bus.outbound;
-    var alloc = std.heap.ArenaAllocator.init(parent);
-    const a = alloc.allocator();
     var it = try outb.flush();
-    var pending = std.ArrayList(core.sig.Outbound).init(a);
+    var pending = std.ArrayList(core.sig.Outbound).init(alloc);
     while (it.next()) |msg_ptr| pending.append(msg_ptr.*) catch @panic("OOM");
 
-    // TODO this needs to turn into actual recipients..
-    std.sort.block(core.sig.Outbound, pending.items, {}, struct {
-        pub fn less(_: void, lhs: core.sig.Outbound, rhs: core.sig.Outbound) bool {
-            return getSource(lhs) < getSource(rhs);
-        }
-    }.less);
+    std.sort.block(core.sig.Outbound, pending.items, {}, sort_sig_asc);
     var i: usize = 0;
     const slice = pending.items;
-    var packets = std.ArrayList(Packet).init(a);
+    var packets = std.ArrayList(Packet).init(alloc);
     while (i < slice.len) {
-        const rid = getSource(slice[i]);
+        const rid = getRecipient(slice[i]);
         var j = i;
-        while (j < slice.len and getSource(slice[j]) == rid) : (j += 1) {}
-        var lines = std.ArrayList([]const u8).init(a);
+        while (j < slice.len and getRecipient(slice[j]) == rid) : (j += 1) {}
+        var msgs = std.ArrayList(Payload).init(alloc);
         for (slice[i..j]) |out| {
-            const line = switch (out) {
-                .Message => |msg| msg.text,
-                .PosUpdate => return error.NotYetImplemented,
-            };
-            lines.append(line) catch @panic("OOM");
+            msgs.append(structure(out)) catch @panic("OOM");
         }
 
-        const body = std.json.stringifyAlloc(a, .{ .msgs = lines.items }, .{}) catch @panic("OOM");
+        const body = std.json.stringifyAlloc(alloc, msgs.items, .{}) catch @panic("OOM");
         packets.append(.{ .recipient = rid, .body = body }) catch @panic("OOM");
 
         i = j;
     }
-    return .{ .alloc = alloc, .list = packets, .idx = 0 };
+    return .{ .list = packets, .idx = 0 };
 }
 
 pub const OutIter = struct {
-    alloc: std.heap.ArenaAllocator,
     list: std.ArrayList(Packet),
     idx: usize,
 
     pub fn next(self: *OutIter) ?Packet {
         if (self.idx == self.list.items.len) {
-            _ = self.alloc.reset(.free_all);
             return null;
         }
         const pkt = self.list.items[self.idx];
@@ -66,47 +72,40 @@ pub const OutIter = struct {
         return pkt;
     }
 };
+test "render compact JSON, bundle packets" {
+    var arena_allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
 
-test "flush assembles correct json packets by recipient and empty outbox" {
-    var outb = &core.bus.outbound;
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const ally = gpa.allocator();
-    var it = try flush(ally);
-    try std.testing.expectEqual(null, it.next());
+    try core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .to = 1, .text = "foo" } } });
+    try core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .to = 1, .text = "bar" } } });
+    try core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .to = 2, .text = "baz" } } });
 
-    // collect packets so we can assert without caring order
-    var got1 = false;
-    var got2 = false;
-    try outb.append(.{ .Message = .{ .source = 1, .text = "foo" } });
-    try outb.append(.{ .Message = .{ .source = 1, .text = "bar" } });
-    try outb.append(.{ .Message = .{ .source = 2, .text = "baz" } });
+    var seen1 = false;
+    var seen2 = false;
 
-    var iter2 = try flush(ally);
-    while (iter2.next()) |pkt| {
-        var parsed = std.json.parseFromSlice(
-            struct { msgs: []const []const u8 },
-            ally,
-            pkt.body,
-            .{},
-        ) catch unreachable;
-        defer parsed.deinit();
+    var it = try flush(arena);
+    while (it.next()) |pkt| {
+        const env = try std.json.parseFromSlice([]const Payload, arena, pkt.body, .{});
+        defer env.deinit();
 
-        if (pkt.recipient == 1) {
-            got1 = true;
-            try std.testing.expectEqualStrings("foo", parsed.value.msgs[0]);
-            try std.testing.expectEqualStrings("bar", parsed.value.msgs[1]);
-            try std.testing.expectEqual(@as(usize, 2), parsed.value.msgs.len);
-        } else if (pkt.recipient == 2) {
-            got2 = true;
-            try std.testing.expectEqualStrings("baz", parsed.value.msgs[0]);
-            try std.testing.expectEqual(@as(usize, 1), parsed.value.msgs.len);
-        } else {
-            try std.testing.expect(false);
+        const msgs = env.value;
+        switch (pkt.recipient) {
+            1 => {
+                seen1 = true;
+                try std.testing.expectEqual(2, msgs.len);
+                try std.testing.expectEqualStrings("foo", msgs[0].Msg.m);
+                try std.testing.expectEqualStrings("bar", msgs[1].Msg.m);
+            },
+            2 => {
+                seen2 = true;
+                try std.testing.expectEqual(1, msgs.len);
+                try std.testing.expectEqualStrings("baz", msgs[0].Msg.m);
+            },
+            else => try std.testing.expect(false),
         }
     }
 
-    try std.testing.expect(got1 and got2);
-    // outbox should now be empty
-    try std.testing.expectEqual(@as(usize, 0), outb.count);
+    try std.testing.expect(seen1 and seen2);
+    try std.testing.expectEqual(0, core.bus.outbound.count);
 }
