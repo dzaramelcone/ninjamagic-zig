@@ -63,11 +63,14 @@ pub const State = struct {
     }
 
     pub fn onConnect(self: *State, id: usize, c: *ws.Conn) !void {
-        try self.conns.put(id, c);
+        if (!self.channel.push(.{ .Connect = .{
+            .source = id,
+            .conn = c,
+        } })) return error.ServerBacklogged;
     }
 
     pub fn onDisconnect(self: *State, id: usize) void {
-        if (self.conns.remove(id)) std.log.debug("{d} disconnected.", .{id});
+        while (!self.channel.push(.{ .Disconnect = .{ .source = id } })) std.atomic.spinLoopHint();
     }
 
     pub fn broadcast(self: *State, text: []const u8) !void {

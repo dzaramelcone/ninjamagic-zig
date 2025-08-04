@@ -57,7 +57,6 @@ pub fn build(b: *std.Build) void {
     embed.addImport("zzz", zzz);
 
     core.addImport("zzz", zzz);
-
     core.addImport("websocket", ws);
 
     net.addImport("zzz", zzz);
@@ -66,6 +65,7 @@ pub fn build(b: *std.Build) void {
     net.addImport("embed", embed);
 
     sys.addImport("core", core);
+    sys.addImport("ws", core);
 
     main.addImport("zzz", zzz);
     main.addImport("websocket", ws);

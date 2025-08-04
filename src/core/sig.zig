@@ -1,8 +1,11 @@
 const Cardinal = @import("util.zig").Cardinal;
 const Position = @import("level.zig").Position;
+const ws = @import("websocket");
 
 pub const Request = struct { user: usize, text: []const u8 };
 
+pub const Connect = struct { source: usize, conn: *ws.Conn };
+pub const Disconnect = struct { source: usize };
 pub const Look = struct { source: usize };
 pub const Walk = struct { source: usize, dir: Cardinal };
 pub const Attack = struct { source: usize, target: usize };
@@ -21,6 +24,8 @@ pub const Outbound = union(enum) {
 };
 
 pub const Signal = union(enum) {
+    Connect: Connect,
+    Disconnect: Disconnect,
     Walk: Walk,
     Look: Look,
     Attack: Attack,
