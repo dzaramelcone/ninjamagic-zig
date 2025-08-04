@@ -32,11 +32,11 @@ pub fn startAction(actor: usize, act: Action, now: core.Seconds, dur: core.Secon
     actions.put(actor, act) catch @panic("OOM");
 }
 
-var actions: std.AutoHashMap(usize, Action) = undefined;
+var actions: std.AutoArrayHashMap(usize, Action) = undefined;
 var events: std.PriorityQueue(Event, void, eventCmp) = undefined;
 
 pub fn init(alloc: std.mem.Allocator) void {
-    actions = std.AutoHashMap(usize, Action).init(alloc);
+    actions = std.AutoArrayHashMap(usize, Action).init(alloc);
     events = std.PriorityQueue(Event, void, eventCmp).init(alloc, undefined);
 }
 

@@ -19,7 +19,7 @@ pub const PlacementError = MovementError || error{MobUniqueViolation};
 
 var positions: std.MultiArrayList(Position) = undefined;
 var mob_rows: std.AutoArrayHashMap(usize, usize) = undefined;
-var levels: std.AutoHashMap(usize, Level) = undefined;
+var levels: std.AutoArrayHashMap(usize, Level) = undefined;
 var test_level: *Level = undefined;
 var alloc: std.mem.Allocator = undefined;
 
@@ -27,7 +27,7 @@ pub fn init(allocator: std.mem.Allocator) !void {
     alloc = allocator;
     positions = .{};
     mob_rows = std.AutoArrayHashMap(usize, usize).init(alloc);
-    levels = std.AutoHashMap(usize, Level).init(alloc);
+    levels = std.AutoArrayHashMap(usize, Level).init(alloc);
     test_level = try Level.initStatic(alloc);
     try levels.put(0, test_level.*);
 }

@@ -10,7 +10,7 @@ pub const State = struct {
 
     now: core.Seconds,
 
-    conns: std.AutoHashMap(usize, *ws.Conn),
+    conns: std.AutoArrayHashMap(usize, *ws.Conn),
     channel: Channel,
 
     pub fn init(alloc: std.mem.Allocator) !State {
@@ -19,7 +19,7 @@ pub const State = struct {
         return .{
             .alloc = alloc,
             .now = 0,
-            .conns = std.AutoHashMap(usize, *ws.Conn).init(alloc),
+            .conns = std.AutoArrayHashMap(usize, *ws.Conn).init(alloc),
             .channel = Channel{},
         };
     }

@@ -68,7 +68,7 @@ test "soak .2k producers + concurrent consumer" {
         threads[i] = try std.Thread.spawn(.{}, producer, .{ &chan, i, pushes, &writers_left });
     }
 
-    var seen = std.AutoHashMap(usize, void).init(std.testing.allocator);
+    var seen = std.AutoArrayHashMap(usize, void).init(std.testing.allocator);
     try seen.ensureTotalCapacity(producers * pushes);
     defer seen.deinit();
 
