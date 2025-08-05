@@ -121,46 +121,65 @@ const parsers = .{
     W,
     NW,
 };
-
 test "basic verbs and error cases" {
     try std.testing.expectError(error.NoInput, parse(.{ .user = 0, .text = "" }));
-    try std.testing.expectEqualDeep(
-        try parse(.{ .user = 0, .text = "foobar" }),
-        Signal{ .Outbound = .{ .Message = .{ .to = 0, .text = "Huh?" } } },
-    );
 
-    try std.testing.expectEqualDeep(parse(.{
-        .user = 0,
-        .text = "'north ",
-    }), Signal{ .Emit = .{ .Say = .{ .source = 0, .text = "north", .reach = .Sight } } });
+    {
+        const got = try parse(.{ .user = 0, .text = "foobar" });
+        try std.testing.expect(got == .Outbound);
+        const msg = got.Outbound.Message;
+        try std.testing.expect(msg.to == 0);
+        try std.testing.expectEqualStrings("Huh?", msg.text);
+    }
 
-    const not_yet_implemented_cases = [_][]const u8{ "look", "a", "attack Bob", "AtTaCk alice" };
-    for (not_yet_implemented_cases) |txt| {
-        try std.testing.expectEqualDeep(
-            try parse(.{ .user = 0, .text = txt }),
-            Signal{ .Outbound = .{ .Message = .{ .to = 0, .text = "That feature isn't ready yet." } } },
-        );
+    {
+        const got = try parse(.{ .user = 0, .text = "'north " });
+        try std.testing.expect(got == .Emit);
+        const say = got.Emit.Say;
+        try std.testing.expect(say.source == 0);
+        try std.testing.expect(say.reach == .Sight);
+        try std.testing.expectEqualStrings("north", say.text);
     }
-    const ur_quiet_cases = [_][]const u8{ "'", "' ", "say", "say   " };
-    for (ur_quiet_cases) |txt| {
-        try std.testing.expectEqualDeep(
-            try parse(.{ .user = 0, .text = txt }),
-            Signal{ .Outbound = .{ .Message = .{ .to = 0, .text = "You open your mouth, as if to speak." } } },
-        );
+
+    {
+        const cases = [_][]const u8{ "look", "a", "attack Bob", "AtTaCk alice" };
+        for (cases) |txt| {
+            const got = try parse(.{ .user = 0, .text = txt });
+            try std.testing.expect(got == .Outbound);
+            const msg = got.Outbound.Message;
+            try std.testing.expect(msg.to == 0);
+            try std.testing.expect(std.mem.eql(u8, msg.text, "That feature isn't ready yet."));
+        }
     }
-    const walk_in_a_dir_cases = [_]struct { verb: []const u8, dir: core.Cardinal }{
-        .{ .verb = "n", .dir = .north },
-        .{ .verb = "Ne", .dir = .northeast },
-        .{ .verb = "e  ", .dir = .east },
-        .{ .verb = "se", .dir = .southeast },
-        .{ .verb = " s", .dir = .south },
-        .{ .verb = " sw ", .dir = .southwest },
-        .{ .verb = "w", .dir = .west },
-    };
-    for (walk_in_a_dir_cases) |case| {
-        try std.testing.expectEqualDeep(parse(.{
-            .user = 0,
-            .text = case.verb,
-        }), Signal{ .Walk = .{ .source = 0, .dir = case.dir } });
+
+    {
+        const cases = [_][]const u8{ "'", "' ", "say", "say   " };
+        for (cases) |txt| {
+            const got = try parse(.{ .user = 0, .text = txt });
+            try std.testing.expect(got == .Outbound);
+            const msg = got.Outbound.Message;
+            try std.testing.expect(msg.to == 0);
+            try std.testing.expect(std.mem.eql(u8, msg.text, "You open your mouth, as if to speak."));
+        }
+    }
+
+    {
+        const cases = [_]struct { verb: []const u8, dir: core.Cardinal }{
+            .{ .verb = "n", .dir = .north },
+            .{ .verb = "Ne", .dir = .northeast },
+            .{ .verb = "e  ", .dir = .east },
+            .{ .verb = "se", .dir = .southeast },
+            .{ .verb = " s", .dir = .south },
+            .{ .verb = " sw ", .dir = .southwest },
+            .{ .verb = "w", .dir = .west },
+        };
+
+        for (cases) |case| {
+            const got = try parse(.{ .user = 0, .text = case.verb });
+            try std.testing.expect(got == .Walk);
+            const walk = got.Walk;
+            try std.testing.expect(walk.source == 0);
+            try std.testing.expect(walk.dir == case.dir);
+        }
     }
 }
