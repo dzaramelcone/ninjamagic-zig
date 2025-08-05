@@ -7,19 +7,17 @@ const Channel = core.Channel(core.sig.Signal, std.math.pow(usize, 2, 10));
 
 pub const State = struct {
     alloc: std.mem.Allocator,
-
     now: core.Seconds,
-
-    conns: std.AutoArrayHashMap(usize, *ws.Conn),
     channel: Channel,
 
     pub fn init(alloc: std.mem.Allocator) !State {
+        try sys.client.init(alloc);
         try sys.move.init(alloc);
         sys.act.init(alloc);
+
         return .{
             .alloc = alloc,
             .now = 0,
-            .conns = std.AutoArrayHashMap(usize, *ws.Conn).init(alloc),
             .channel = Channel{},
         };
     }
@@ -38,6 +36,8 @@ pub const State = struct {
         for (self.channel.flip()) |sig| {
             core.bus.enqueue(sig) catch continue;
         }
+        // Update client list.
+        sys.client.step();
 
         // Handle actions.
         sys.act.step(self.now);
@@ -45,8 +45,10 @@ pub const State = struct {
         // Handle moves.
         sys.move.step();
 
+        // Update LOS.
         sys.sight.step();
 
+        // Emit messages.
         try sys.emit.step(arena);
 
         // Send all pending packets to clients.
