@@ -24,16 +24,15 @@ pub fn build(b: *std.Build) void {
     const zqlite = b.dependency("zqlite", .{
         .target = target,
         .optimize = optimize,
-    });
-    main.addImport("zqlite", zqlite.module("zqlite"));
-    const default_sqlite3_build = [_][]const u8{"-std=c99"};
+    }).module("zqlite");
+
     main.addCSourceFile(.{
         .file = b.path("embed/sqlite/sqlite3.c"),
-        .flags = &default_sqlite3_build,
+        .flags = &[_][]const u8{"-std=c99"},
     });
     main.link_libc = true;
 
-    // Internal deps.
+    // lib.
     const embed = b.addModule("embed", .{
         .root_source_file = b.path("embed/module.zig"),
         .target = target,
@@ -73,6 +72,7 @@ pub fn build(b: *std.Build) void {
 
     main.addImport("zzz", zzz);
     main.addImport("websocket", ws);
+    main.addImport("zqlite", zqlite);
     main.addImport("core", core);
     main.addImport("net", net);
     main.addImport("sys", sys);
