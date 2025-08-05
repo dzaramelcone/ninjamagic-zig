@@ -6,7 +6,7 @@ networks:
 services:
   app:
     container_name: app
-    image: busybox
+    image: debian:bookworm-slim
     platform: "linux/amd64"
     volumes: [./zig-out/bin/mud:/usr/local/bin/mud]
     entrypoint: ["/usr/local/bin/mud"]
