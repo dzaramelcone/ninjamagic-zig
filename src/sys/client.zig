@@ -23,7 +23,9 @@ pub fn step() void {
         _ = clients.swapRemove(disconnect.source);
     }
 }
-
+pub fn get(id: usize) ?*ws.Conn {
+    return clients.get(id);
+}
 pub fn list() []usize {
     return clients.keys();
 }
@@ -41,20 +43,20 @@ test "basic client tracking" {
 
     try core.bus.enqueue(.{ .Connect = .{ .source = 1, .conn = &mockConn } });
     step();
-    try std.testing.expect(clients.get(1) != null);
-    try std.testing.expect(clients.get(2) == null);
+    try std.testing.expect(get(1) != null);
+    try std.testing.expect(get(2) == null);
     try std.testing.expect(list().len == 1);
 
     try core.bus.enqueue(.{ .Connect = .{ .source = 2, .conn = &mockConn } });
     step();
-    try std.testing.expect(clients.get(1) != null);
-    try std.testing.expect(clients.get(2) != null);
+    try std.testing.expect(get(1) != null);
+    try std.testing.expect(get(2) != null);
     try std.testing.expect(list().len == 2);
 
     try core.bus.enqueue(.{ .Disconnect = .{ .source = 1 } });
     step();
-    try std.testing.expect(clients.get(1) == null);
-    try std.testing.expect(clients.get(2) != null);
+    try std.testing.expect(get(1) == null);
+    try std.testing.expect(get(2) != null);
     try std.testing.expect(list().len == 1);
 
     try core.bus.enqueue(.{ .Disconnect = .{ .source = 2 } });

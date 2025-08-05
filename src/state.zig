@@ -11,7 +11,7 @@ pub const State = struct {
     channel: Channel,
 
     pub fn init(alloc: std.mem.Allocator) !State {
-        try sys.client.init(alloc);
+        sys.client.init(alloc);
         try sys.move.init(alloc);
         sys.act.init(alloc);
 
@@ -54,7 +54,7 @@ pub const State = struct {
         // Send all pending packets to clients.
         var it = try sys.outbox.flush(arena);
         while (it.next()) |pkt| {
-            const conn = self.conns.get(pkt.recipient) orelse continue;
+            const conn = sys.client.get(pkt.recipient) orelse continue;
             try conn.write(pkt.body);
         }
     }
