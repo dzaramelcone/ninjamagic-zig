@@ -26,8 +26,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     main.addImport("zqlite", zqlite.module("zqlite"));
+    const default_sqlite3_build = [_][]const u8{"-std=c99"};
+    main.addCSourceFile(.{
+        .file = b.path("embed/sqlite/sqlite3.c"),
+        .flags = &default_sqlite3_build,
+    });
     main.link_libc = true;
-    main.linkSystemLibrary("sqlite3", .{});
 
     // Internal deps.
     const embed = b.addModule("embed", .{
