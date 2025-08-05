@@ -1,7 +1,7 @@
 const core = @import("core");
 const std = @import("std");
 const zts = core.zts;
-const move = @import("move.zig");
+const client = @import("client.zig");
 const sight = @import("sight.zig");
 const name = @import("name.zig");
 
@@ -18,28 +18,27 @@ pub fn step(alloc: std.mem.Allocator) !void {
 }
 
 fn handleSay(em: core.sig.Emit, alloc: std.mem.Allocator) !void {
+    var buf = std.ArrayList(u8).init(alloc);
+    const out = buf.writer();
+    defer buf.deinit();
+
     const say = em.Say;
     // first
     {
-        var buf = std.ArrayList(u8).init(alloc);
-        defer buf.deinit();
-        const out = buf.writer();
         try zts.print(say_tmpl, "first", .{ .msg = say.text }, out);
         const txt_cpy = try alloc.dupe(u8, buf.items);
         try core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .to = say.source, .text = txt_cpy } } });
+        buf.clearRetainingCapacity();
     }
     // third
-    var buf = std.ArrayList(u8).init(alloc);
-    defer buf.deinit();
-
-    for (move.list()) |to| {
+    for (client.list()) |to| {
         if (to == say.source) continue;
         if (!sight.canMobSee(say.source, to)) continue;
 
         try zts.print(say_tmpl, "third", .{
             .source = try name.get(say.source),
             .msg = say.text,
-        }, buf.writer());
+        }, out);
         const txt_cpy = try alloc.dupe(u8, buf.items);
         try core.bus.enqueue(.{ .Outbound = .{ .Message = .{
             .to = to,
@@ -53,15 +52,22 @@ test "say emits correct packets for sight-based reach" {
     var arena_allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();
+    const move = @import("move.zig");
 
+    client.init(std.testing.allocator);
     try move.init(std.testing.allocator);
     name.init(std.testing.allocator);
+
     defer name.deinit();
     defer move.deinit();
+    defer client.deinit();
+
+    try core.bus.enqueue(.{ .Connect = .{ .source = 1, .conn = undefined } });
+    try core.bus.enqueue(.{ .Connect = .{ .source = 2, .conn = undefined } });
+    client.step();
 
     try move.place(1, .{ .lvl_key = 0, .x = 0, .y = 0 });
     name.put(1, "Alice");
-
     {
         try core.bus.enqueue(.{ .Emit = .{ .Say = .{ .source = 1, .text = "hello", .reach = .Sight } } });
         try step(arena);
