@@ -50,7 +50,7 @@ pub fn step(now: core.Seconds) void {
         if (evt.end > now) break;
         const act = actions.get(evt.owner) orelse continue;
         if (act.id != evt.id) continue;
-        defer _ = actions.remove(evt.owner);
+        defer _ = actions.swapRemove(evt.owner);
         defer _ = events.remove();
 
         core.bus.enqueue(act.on_execute) catch break;
@@ -82,18 +82,16 @@ test "single event fires at end time" {
     step(9);
     {
         var it = try core.bus.attack.flush();
-        try std.testing.expectEqual(@as(?*sig.Attack, null), it.next());
+        try std.testing.expectEqual(null, it.next());
     }
 
     // at end, signal fired
     step(10);
     {
         var it = try core.bus.attack.flush();
-        const s = it.next() orelse unreachable;
-        try std.testing.expectEqualDeep(
-            sig.Attack{ .source = 0, .target = 1 },
-            s.*,
-        );
-        try std.testing.expectEqual(@as(?*sig.Attack, null), it.next());
+        const s = it.next().?.*;
+        try std.testing.expectEqual(s.source, 0);
+        try std.testing.expectEqual(s.target, 1);
+        try std.testing.expectEqual(it.next(), null);
     }
 }
