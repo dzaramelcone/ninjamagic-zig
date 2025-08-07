@@ -1,3 +1,4 @@
+//! Global game state and tick orchestrator.
 const std = @import("std");
 const core = @import("core");
 const sys = @import("sys");
@@ -29,6 +30,8 @@ pub const State = struct {
         self.alloc.destroy(self);
     }
 
+    /// Advance the simulation by one frame.
+    /// Drains inbound signals, steps each system, then flushes outbound packets.
     pub fn step(self: *State, dt: core.Seconds) !void {
         self.now += dt;
         var arena_allocator = std.heap.ArenaAllocator.init(self.alloc);

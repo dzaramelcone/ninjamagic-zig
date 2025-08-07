@@ -1,3 +1,4 @@
+//! Player text parser. Turns raw input into typed signals.
 const std = @import("std");
 const core = @import("core");
 const Request = core.sig.Request;

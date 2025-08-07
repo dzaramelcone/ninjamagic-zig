@@ -1,3 +1,4 @@
+//! Lock-free double-buffered queue used for cross-thread signal passing.
 const std = @import("std");
 
 pub fn Channel(comptime T: type, N: usize) type {
