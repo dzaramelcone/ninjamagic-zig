@@ -2,6 +2,7 @@ const std = @import("std");
 const zzz = @import("zzz");
 const embed = @import("embed");
 const cfg = @import("core").Config.Zzz;
+const oauth = @import("oauth.zig");
 
 const Tardy = zzz.tardy.Tardy(.auto);
 const Runtime = zzz.tardy.Runtime;
@@ -55,12 +56,108 @@ fn serveStatic(comptime entry: embed.HostedFile) *const fn (*const Context, void
     }.handler;
 }
 
-const layers: [5]Layer = .{
+const ConfigError = error{ MissingEnv };
+
+fn googleConfig(alloc: std.mem.Allocator) ConfigError!oauth.Config {
+    var env_map = try std.process.getEnvMap(alloc);
+    defer env_map.deinit();
+    return .{
+        .client_id = env_map.get("GOOGLE_CLIENT_ID") orelse return ConfigError.MissingEnv,
+        .client_secret = env_map.get("GOOGLE_CLIENT_SECRET") orelse return ConfigError.MissingEnv,
+        .redirect_uri = env_map.get("GOOGLE_REDIRECT_URI") orelse return ConfigError.MissingEnv,
+    };
+}
+
+fn githubConfig(alloc: std.mem.Allocator) ConfigError!oauth.Config {
+    var env_map = try std.process.getEnvMap(alloc);
+    defer env_map.deinit();
+    return .{
+        .client_id = env_map.get("GITHUB_CLIENT_ID") orelse return ConfigError.MissingEnv,
+        .client_secret = env_map.get("GITHUB_CLIENT_SECRET") orelse return ConfigError.MissingEnv,
+        .redirect_uri = env_map.get("GITHUB_REDIRECT_URI") orelse return ConfigError.MissingEnv,
+    };
+}
+
+fn googleStart(ctx: *const Context, _: void) !Respond {
+    const alloc = ctx.allocator;
+    const cfg = googleConfig(alloc) catch |err| {
+        return ctx.response.apply(.{ .status = .InternalServerError, .mime = zzz.HTTP.Mime.TEXT, .body = @errorName(err) });
+    };
+    const url = oauth.authUrl(alloc, .google, cfg) catch |err| {
+        return ctx.response.apply(.{ .status = .InternalServerError, .mime = zzz.HTTP.Mime.TEXT, .body = @errorName(err) });
+    };
+    return ctx.response.apply(.{
+        .status = .Found,
+        .mime = zzz.HTTP.Mime.HTML,
+        .headers = &.{.{ "Location", url }},
+    });
+}
+
+fn githubStart(ctx: *const Context, _: void) !Respond {
+    const alloc = ctx.allocator;
+    const cfg = githubConfig(alloc) catch |err| {
+        return ctx.response.apply(.{ .status = .InternalServerError, .mime = zzz.HTTP.Mime.TEXT, .body = @errorName(err) });
+    };
+    const url = oauth.authUrl(alloc, .github, cfg) catch |err| {
+        return ctx.response.apply(.{ .status = .InternalServerError, .mime = zzz.HTTP.Mime.TEXT, .body = @errorName(err) });
+    };
+    return ctx.response.apply(.{
+        .status = .Found,
+        .mime = zzz.HTTP.Mime.HTML,
+        .headers = &.{.{ "Location", url }},
+    });
+}
+
+fn googleCallback(ctx: *const Context, _: void) !Respond {
+    const alloc = ctx.allocator;
+    const code = ctx.queries.get("code") orelse return ctx.response.apply(.{
+        .status = .BadRequest,
+        .mime = zzz.HTTP.Mime.TEXT,
+        .body = "missing code",
+    });
+    const cfg = googleConfig(alloc) catch |err| {
+        return ctx.response.apply(.{ .status = .InternalServerError, .mime = zzz.HTTP.Mime.TEXT, .body = @errorName(err) });
+    };
+    const token = oauth.exchangeCode(alloc, .google, cfg, code) catch |err| {
+        return ctx.response.apply(.{ .status = .InternalServerError, .mime = zzz.HTTP.Mime.TEXT, .body = @errorName(err) });
+    };
+    return ctx.response.apply(.{
+        .status = .OK,
+        .mime = zzz.HTTP.Mime.JSON,
+        .body = token,
+    });
+}
+
+fn githubCallback(ctx: *const Context, _: void) !Respond {
+    const alloc = ctx.allocator;
+    const code = ctx.queries.get("code") orelse return ctx.response.apply(.{
+        .status = .BadRequest,
+        .mime = zzz.HTTP.Mime.TEXT,
+        .body = "missing code",
+    });
+    const cfg = githubConfig(alloc) catch |err| {
+        return ctx.response.apply(.{ .status = .InternalServerError, .mime = zzz.HTTP.Mime.TEXT, .body = @errorName(err) });
+    };
+    const token = oauth.exchangeCode(alloc, .github, cfg, code) catch |err| {
+        return ctx.response.apply(.{ .status = .InternalServerError, .mime = zzz.HTTP.Mime.TEXT, .body = @errorName(err) });
+    };
+    return ctx.response.apply(.{
+        .status = .OK,
+        .mime = zzz.HTTP.Mime.JSON,
+        .body = token,
+    });
+}
+
+const layers: [9]Layer = .{
     Route.init(embed.hosted_files[0].path).get({}, serveStatic(embed.hosted_files[0])).layer(),
     Route.init(embed.hosted_files[1].path).get({}, serveStatic(embed.hosted_files[1])).layer(),
     Route.init(embed.hosted_files[2].path).get({}, serveStatic(embed.hosted_files[2])).layer(),
     Route.init(embed.hosted_files[3].path).get({}, serveStatic(embed.hosted_files[3])).layer(),
     Route.init(embed.hosted_files[4].path).get({}, serveStatic(embed.hosted_files[4])).layer(),
+    Route.init("/auth/google").get({}, googleStart).layer(),
+    Route.init("/auth/google/callback").get({}, googleCallback).layer(),
+    Route.init("/auth/github").get({}, githubStart).layer(),
+    Route.init("/auth/github/callback").get({}, githubCallback).layer(),
 };
 
 pub fn host(alloc: std.mem.Allocator) !void {
