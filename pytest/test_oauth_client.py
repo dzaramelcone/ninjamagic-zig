@@ -3,15 +3,16 @@ import os
 import pathlib
 import subprocess
 import time
+import urllib.parse
 import pytest
 
 PORT = 9224
 HOST = "localhost"
 
 
-def _request(path):
+def _request(path, headers=None):
     conn = http.client.HTTPConnection(HOST, PORT, timeout=5)
-    conn.request("GET", path)
+    conn.request("GET", path, headers=headers or {})
     return conn.getresponse()
 
 
@@ -27,6 +28,7 @@ def zig_server():
             "GITHUB_CLIENT_ID": "id",
             "GITHUB_CLIENT_SECRET": "secret",
             "GITHUB_REDIRECT_URI": f"http://{HOST}:{PORT}/auth/github/callback",
+            "OAUTH_TEST_MODE": "1",
         }
     )
     try:
@@ -44,23 +46,25 @@ def zig_server():
         proc.kill()
 
 
-def test_google_start_redirect(zig_server):
+def test_google_flow(zig_server):
     res = _request("/auth/google")
     assert res.status == 302
-    assert "accounts.google.com" in res.getheader("Location")
+    loc = res.getheader("Location")
+    cookie = res.getheader("Set-Cookie").split(";", 1)[0]
+    qs = urllib.parse.urlparse(loc).query
+    state = urllib.parse.parse_qs(qs)["state"][0]
+    assert state in cookie
+    res2 = _request(f"/auth/google/callback?code=bad&state={state}", {"Cookie": cookie})
+    assert res2.status == 400
 
 
-def test_google_callback_invalid_code(zig_server):
-    res = _request("/auth/google/callback?code=bad")
-    assert res.status != 200
-
-
-def test_github_start_redirect(zig_server):
+def test_github_flow(zig_server):
     res = _request("/auth/github")
     assert res.status == 302
-    assert "github.com/login/oauth/authorize" in res.getheader("Location")
-
-
-def test_github_callback_invalid_code(zig_server):
-    res = _request("/auth/github/callback?code=bad")
-    assert res.status != 200
+    loc = res.getheader("Location")
+    cookie = res.getheader("Set-Cookie").split(";", 1)[0]
+    qs = urllib.parse.urlparse(loc).query
+    state = urllib.parse.parse_qs(qs)["state"][0]
+    assert state in cookie
+    res2 = _request(f"/auth/github/callback?code=bad&state={state}", {"Cookie": cookie})
+    assert res2.status == 400
