@@ -28,6 +28,7 @@ pub const Config = struct {
     pub const Ws: struct {
         address: []const u8 = "0.0.0.0",
         port: u16 = 9862,
+        max_message_size: usize = 1 << 20,
         handshake: struct {
             timeout: u32 = 3,
             max_size: usize = 1024,
