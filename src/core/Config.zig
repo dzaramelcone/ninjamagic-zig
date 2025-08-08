@@ -1,4 +1,3 @@
-const websocket = @import("websocket");
 const pg = @import("pg");
 const zzz = @import("zzz");
 
@@ -26,15 +25,15 @@ pub const Config = struct {
         },
     };
 
-    pub const Ws: websocket.server.Config = .{
-        .address = "0.0.0.0",
-        .port = 9862,
-        .handshake = .{
-            .timeout = 3,
-            .max_size = 1024,
-            .max_headers = 0,
-        },
-    };
+    pub const Ws: struct {
+        address: []const u8 = "0.0.0.0",
+        port: u16 = 9862,
+        handshake: struct {
+            timeout: u32 = 3,
+            max_size: usize = 1024,
+            max_headers: u32 = 0,
+        } = .{},
+    } = .{};
 
     pub const Zzz: struct {
         host: []const u8 = "0.0.0.0",

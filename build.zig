@@ -21,10 +21,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }).module("pg");
 
-    const ws = b.dependency("websocket", .{
-        .target = target,
-        .optimize = optimize,
-    }).module("websocket");
 
     // Internal deps.
     const embed = b.addModule("embed", .{
@@ -55,11 +51,9 @@ pub fn build(b: *std.Build) void {
 
     core.addImport("zzz", zzz);
     core.addImport("pg", pg);
-    core.addImport("websocket", ws);
 
     net.addImport("zzz", zzz);
     net.addImport("pg", pg);
-    net.addImport("websocket", ws);
     net.addImport("core", core);
     net.addImport("embed", embed);
 
@@ -67,7 +61,6 @@ pub fn build(b: *std.Build) void {
 
     exe_mod.addImport("zzz", zzz);
     exe_mod.addImport("pg", pg);
-    exe_mod.addImport("websocket", ws);
     exe_mod.addImport("core", core);
     exe_mod.addImport("net", net);
     exe_mod.addImport("sys", sys);

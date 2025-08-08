@@ -1,7 +1,7 @@
 const std = @import("std");
 const core = @import("core");
 const sys = @import("sys");
-const ws = @import("websocket");
+const net = @import("net");
 
 const Channel = core.Channel(core.sig.Signal, std.math.pow(usize, 2, 10));
 
@@ -10,7 +10,7 @@ pub const State = struct {
 
     now: core.Seconds,
 
-    conns: std.AutoArrayHashMap(usize, *ws.Conn),
+    conns: std.AutoArrayHashMap(usize, *net.Conn),
     channel: Channel,
 
     pub fn init(alloc: std.mem.Allocator) !State {
@@ -19,7 +19,7 @@ pub const State = struct {
         return .{
             .alloc = alloc,
             .now = 0,
-            .conns = std.AutoArrayHashMap(usize, *ws.Conn).init(alloc),
+            .conns = std.AutoArrayHashMap(usize, *net.Conn).init(alloc),
             .channel = Channel{},
         };
     }
@@ -62,7 +62,7 @@ pub const State = struct {
         if (!self.channel.push(sig)) return error.ServerBacklogged;
     }
 
-    pub fn onConnect(self: *State, id: usize, c: *ws.Conn) !void {
+    pub fn onConnect(self: *State, id: usize, c: *net.Conn) !void {
         try self.conns.put(id, c);
     }
 
