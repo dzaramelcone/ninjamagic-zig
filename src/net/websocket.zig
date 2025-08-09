@@ -4,6 +4,8 @@ const zzz = @import("zzz");
 const Tardy = zzz.tardy.Tardy(.auto);
 const Runtime = zzz.tardy.Runtime;
 const Socket = zzz.tardy.Socket;
+const TardyFrame = zzz.tardy.Frame;
+const Timer = zzz.tardy.Timer;
 
 var next_id: std.atomic.Value(usize) = .{ .raw = 1 };
 
@@ -24,7 +26,7 @@ pub const Config = struct {
         handshake: struct {
             timeout: u32 = 3,
             max_size: usize = 1024,
-            max_headers: u32 = 0,
+            max_headers: u32 = 16,
         } = .{},
     } = .{};
 
@@ -61,6 +63,20 @@ pub const Conn = struct {
         try self.sendFrame(0x1, data);
     }
 
+    /// Schedule a write on the connection's Tardy runtime.
+    /// Safe to call from non-Tardy threads.
+    pub fn writeAsync(self: *Conn, data: []const u8) !void {
+        // Copy payload into the runtime allocator so it outlives the caller.
+        const out_buf = try self.rt.allocator.alloc(u8, data.len);
+        @memcpy(out_buf, data);
+        try self.rt.spawn(.{ self.rt, self, out_buf }, struct {
+            fn send_task(rt: *Runtime, conn: *Conn, payload: []u8) !void {
+                defer rt.allocator.free(payload);
+                conn.write(payload) catch {};
+            }
+        }.send_task, 16 * 1024);
+    }
+
     fn sendFrame(self: *Conn, opcode: u8, payload: []const u8) !void {
         var header: [10]u8 = undefined;
         header[0] = 0x80 | opcode;
@@ -78,8 +94,9 @@ pub const Conn = struct {
             header_len = 10;
         }
 
-        _ = try self.socket.send_all(self.rt, header[0..header_len]);
-        if (payload.len > 0) _ = try self.socket.send_all(self.rt, payload);
+        var w = self.socket.writer(self.rt);
+        try w.writeAll(header[0..header_len]);
+        if (payload.len > 0) try w.writeAll(payload);
     }
 
     fn sendClose(self: *Conn, code: u16, reason: []const u8) !void {
@@ -100,7 +117,8 @@ pub const Conn = struct {
     }
 
     pub fn close(self: *Conn) void {
-        self.socket.close_blocking();
+        // Prefer async close when possible.
+        self.socket.close(self.rt) catch self.socket.close_blocking();
     }
 };
 
@@ -132,9 +150,13 @@ const Session = struct {
 };
 
 fn readExact(rt: *Runtime, sock: *Socket, buf: []u8) !void {
+    var r = sock.reader(rt);
     var off: usize = 0;
     while (off < buf.len) {
-        const n = try sock.recv(rt, buf[off..]);
+        const n = r.read(buf[off..]) catch |e| switch (e) {
+            error.Unexpected => return e,
+            else => return error.ConnectionClosed,
+        };
         if (n == 0) return error.ConnectionClosed;
         off += n;
     }
@@ -196,7 +218,7 @@ fn readFrame(rt: *Runtime, alloc: std.mem.Allocator, conn: *Conn) !Frame {
 }
 
 fn send400(rt2: *Runtime, c: *Conn) void {
-    _ = c.socket.send_all(rt2, "HTTP/1.1 400 Bad Request\r\n\r\n") catch {};
+    c.socket.writer(rt2).writeAll("HTTP/1.1 400 Bad Request\r\n\r\n") catch {};
 }
 
 fn hashLowerAscii(s: []const u8) u64 {
@@ -210,16 +232,30 @@ fn hashLowerAscii(s: []const u8) u64 {
     return h;
 }
 
+fn logBadHandshake(prefix: []const u8, request: []const u8) void {
+    const peek_len: usize = @min(request.len, 64);
+    if (peek_len == 0) {
+        std.log.debug("WS 400 {s}; peek=<empty>", .{prefix});
+    } else {
+        std.log.debug("WS 400 {s}; peek={any}", .{ prefix, std.fmt.fmtSliceHexLower(request[0..peek_len]) });
+    }
+}
+
 fn performHandshake(rt: *Runtime, conn: *Conn) !Handshake {
     // --- Read request up to CRLFCRLF with a hard cap ---
     var buf: [cfg.Ws.handshake.max_size]u8 = undefined;
     var len: usize = 0;
+    var r = conn.socket.reader(rt);
     while (true) {
-        const n = try conn.socket.recv(rt, buf[len..]);
+        const n = r.read(buf[len..]) catch |e| switch (e) {
+            error.Unexpected => return e,
+            else => return error.ConnectionClosed,
+        };
         if (n == 0) return error.ConnectionClosed;
         len += n;
         if (std.mem.indexOf(u8, buf[0..len], "\r\n\r\n")) |_| break;
         if (len >= buf.len) {
+            logBadHandshake("too_large", buf[0..len]);
             send400(rt, conn);
             return error.HandshakeTooLarge;
         }
@@ -229,15 +265,18 @@ fn performHandshake(rt: *Runtime, conn: *Conn) !Handshake {
     // --- Parse request line ---
     var it = std.mem.splitSequence(u8, request, "\r\n");
     const request_line = it.next() orelse {
+        logBadHandshake("no_request_line", request);
         send400(rt, conn);
         return error.BadHandshake;
     };
     std.log.info("WS request line: {s}", .{request_line});
     if (!std.mem.startsWith(u8, request_line, "GET ")) {
+        logBadHandshake("not_get", request);
         send400(rt, conn);
         return error.BadHandshake;
     }
     if (std.mem.indexOf(u8, request_line, " HTTP/1.1") == null) {
+        logBadHandshake("not_http11", request);
         send400(rt, conn);
         return error.BadHandshake;
     }
@@ -247,9 +286,16 @@ fn performHandshake(rt: *Runtime, conn: *Conn) !Handshake {
     var upgrade: ?[]const u8 = null;
     var connection: ?[]const u8 = null;
     var version: ?[]const u8 = null;
+    var header_count: u32 = 0;
 
     while (it.next()) |line| {
         if (line.len == 0) break; // end of headers
+        header_count += 1;
+        if (cfg.Ws.handshake.max_headers > 0 and header_count > cfg.Ws.handshake.max_headers) {
+            logBadHandshake("too_many_headers", request);
+            send400(rt, conn);
+            return error.BadHandshake;
+        }
         const colon = std.mem.indexOfScalar(u8, line, ':') orelse continue;
 
         const name_raw = std.mem.trim(u8, line[0..colon], " \t");
@@ -274,12 +320,14 @@ fn performHandshake(rt: *Runtime, conn: *Conn) !Handshake {
 
     // --- Validate presence ---
     if (key == null or upgrade == null or connection == null or version == null) {
+        logBadHandshake("missing_header", request);
         send400(rt, conn);
         return error.BadHandshake;
     }
 
     // Upgrade: websocket
     if (!std.ascii.eqlIgnoreCase(std.mem.trim(u8, upgrade.?, " \t"), "websocket")) {
+        logBadHandshake("bad_upgrade", request);
         send400(rt, conn);
         return error.BadHandshake;
     }
@@ -294,12 +342,14 @@ fn performHandshake(rt: *Runtime, conn: *Conn) !Handshake {
         }
     }
     if (!has_upgrade) {
+        logBadHandshake("no_conn_upgrade", request);
         send400(rt, conn);
         return error.BadHandshake;
     }
 
     // Sec-WebSocket-Version: 13
     if (!std.ascii.eqlIgnoreCase(std.mem.trim(u8, version.?, " \t"), "13")) {
+        logBadHandshake("bad_version", request);
         send400(rt, conn);
         return error.BadHandshake;
     }
@@ -307,11 +357,13 @@ fn performHandshake(rt: *Runtime, conn: *Conn) !Handshake {
     // Sec-WebSocket-Key must base64-decode to 16 bytes.
     // In practice that means a 24-char base64 string (including padding).
     if (std.mem.trim(u8, key.?, " \t").len != 24) {
+        logBadHandshake("bad_key_len", request);
         send400(rt, conn);
         return error.BadHandshake;
     }
     var key_decoded: [16]u8 = undefined;
     std.base64.standard.Decoder.decode(&key_decoded, key.?) catch {
+        logBadHandshake("bad_key_base64", request);
         send400(rt, conn);
         return error.BadHandshake;
     };
@@ -349,6 +401,15 @@ inline fn utf8Valid(s: []const u8) bool {
     }
 }
 
+fn handshakeTimeoutFrame(rt: *Runtime, conn: *Conn, done: *std.atomic.Value(u8)) !void {
+    // If the timer elapses before 'done' is set, close the socket.
+    Timer.delay(rt, .{ .seconds = cfg.Ws.handshake.timeout, .nanos = 0 }) catch return;
+    if (done.load(.acquire) == 0) {
+        std.log.warn("WS handshake timeout; closing connection", .{});
+        conn.close();
+    }
+}
+
 fn connectionFrame(rt: *Runtime, client: Socket, handler: *const WsHandler) !void {
     var conn_ptr = try rt.allocator.create(Conn);
     conn_ptr.* = .{ .socket = client, .rt = rt };
@@ -357,13 +418,17 @@ fn connectionFrame(rt: *Runtime, client: Socket, handler: *const WsHandler) !voi
         rt.allocator.destroy(conn_ptr);
     }
 
+    // Start handshake timeout watchdog.
+    var hs_done = std.atomic.Value(u8).init(0);
+    try rt.spawn(.{ rt, conn_ptr, &hs_done }, handshakeTimeoutFrame, 32 * 1024);
+
     const hs = performHandshake(rt, conn_ptr) catch {
-        conn_ptr.close();
+        _ = hs_done.swap(1, .release); // stop timeout from double-closing
         return;
     };
+    _ = hs_done.swap(1, .release);
 
     var session = Session.init(&hs, conn_ptr, handler) catch {
-        conn_ptr.close();
         return;
     };
     defer session.close();
@@ -467,9 +532,9 @@ fn connectionFrame(rt: *Runtime, client: Socket, handler: *const WsHandler) !voi
         }
     }
 }
-var accept_once: std.atomic.Value(u8) = .{ .raw = 0 };
 
-fn acceptLoop(rt: *Runtime, server: *Socket, handler: *const WsHandler) !void { // pointer
+fn acceptLoop(rt: *Runtime, server: *Socket, handler: *const WsHandler) !void {
+    std.log.info("WS accept loop active on rt={d}", .{rt.id});
     while (true) {
         const client = try server.accept(rt);
         std.log.info("WS accepted a client", .{});
@@ -489,15 +554,20 @@ pub fn host_ws(allocator: std.mem.Allocator, handler: *const WsHandler) !void {
 
     const EntryParams = struct {
         handler: *const WsHandler,
-        socket: *Socket, // was: Socket
+        socket: *Socket,
     };
 
     try t.entry(EntryParams{ .socket = &socket, .handler = handler }, struct {
         fn entry(rt: *Runtime, p: EntryParams) !void {
-            if (accept_once.swap(1, .acq_rel) == 0) {
-                try rt.spawn(.{ rt, p.socket, p.handler }, acceptLoop, 256 * 1024);
+            std.log.info("WS entry on rt={d}; spawning accept loop", .{rt.id});
+            // Spawn an accept loop per runtime.
+            if (rt.spawn(.{ rt, p.socket, p.handler }, acceptLoop, 256 * 1024)) |_| {
+                std.log.info("WS accept loop spawned on rt={d}", .{rt.id});
+            } else |e| {
+                std.log.err("WS accept loop spawn failed on rt={d}: {}", .{ rt.id, e });
             }
-            while (true) std.time.sleep(1_000_000_000);
+            // Important: return from entry so the runtime's run loop starts.
+            return;
         }
     }.entry);
 }
@@ -565,9 +635,15 @@ fn performHandshakeGeneric(alloc: std.mem.Allocator, sock: *TestSock) !void {
     var upgrade: ?[]const u8 = null;
     var connection: ?[]const u8 = null;
     var version: ?[]const u8 = null;
+    var header_count: u32 = 0;
 
     while (it.next()) |line| {
         if (line.len == 0) break;
+        header_count += 1;
+        if (cfg.Ws.handshake.max_headers > 0 and header_count > cfg.Ws.handshake.max_headers) {
+            send400Generic(sock, {});
+            return error.BadHandshake;
+        }
         const colon = std.mem.indexOfScalar(u8, line, ':') orelse continue;
         const name_raw = std.mem.trim(u8, line[0..colon], " \t");
         const value_raw = std.mem.trim(u8, line[colon + 1 ..], " \t");
@@ -671,6 +747,30 @@ test "handshake success (fragmented input) produces 101 + correct Accept" {
     try std.testing.expect(std.mem.indexOf(u8, out, "Upgrade: websocket\r\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, out, "Connection: Upgrade\r\n") != null);
     try std.testing.expect(std.mem.indexOf(u8, out, "Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=") != null);
+}
+
+test "handshake 400 when header count exceeds limit" {
+    // Build a request with many headers to exceed cfg.Ws.handshake.max_headers (default 64).
+    var list = std.ArrayList(u8).init(std.testing.allocator);
+    defer list.deinit();
+
+    try list.appendSlice("GET / HTTP/1.1\r\n");
+    try list.appendSlice("Host: x\r\n");
+    // 65 dummy headers
+    var i: usize = 0;
+    while (i < 65) : (i += 1) {
+        try list.writer().print("X-{d}: a\r\n", .{i});
+    }
+    try list.appendSlice("Upgrade: websocket\r\n");
+    try list.appendSlice("Connection: Upgrade\r\n");
+    try list.appendSlice("Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n");
+    try list.appendSlice("Sec-WebSocket-Version: 13\r\n\r\n");
+
+    var sock = TestSock.init(std.testing.allocator, list.items, 1024);
+    defer sock.deinit();
+
+    try std.testing.expectError(error.BadHandshake, performHandshakeGeneric(std.testing.allocator, &sock));
+    try std.testing.expect(std.mem.startsWith(u8, sock.tx.items, "HTTP/1.1 400"));
 }
 
 test "sec-websocket-accept" {

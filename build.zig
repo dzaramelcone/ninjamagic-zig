@@ -97,11 +97,17 @@ pub fn build(b: *std.Build) void {
         .root_module = sys,
         .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
     });
+    const net_tests = b.addTest(.{
+        .root_module = net,
+        .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
+    });
 
     const run_core_tests = b.addRunArtifact(core_tests);
     const run_sys_tests = b.addRunArtifact(sys_tests);
+    const run_net_tests = b.addRunArtifact(net_tests);
 
     test_step.dependOn(&run_exe_unit_tests.step);
     test_step.dependOn(&run_core_tests.step);
     test_step.dependOn(&run_sys_tests.step);
+    test_step.dependOn(&run_net_tests.step);
 }
