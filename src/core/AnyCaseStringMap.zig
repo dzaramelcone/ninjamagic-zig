@@ -23,7 +23,7 @@ pub fn AnyCaseStringMap(comptime V: type) type {
 const assert = std.debug.assert;
 const testing = std.testing;
 
-test "AnyCaseStringMap: Add Stuff" {
+test "core/AnyCaseStringMap.zig: add stuff" {
     var map = AnyCaseStringMap([]const u8).init(testing.allocator);
     defer map.deinit();
 

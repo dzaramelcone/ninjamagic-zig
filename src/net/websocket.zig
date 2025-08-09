@@ -1,6 +1,6 @@
 const std = @import("std");
 const ws = @import("websocket");
-const core = @import("core");
+const core = @import("../core/module.zig");
 const cfg = core.Config;
 
 pub fn Handler(comptime T: type) type {

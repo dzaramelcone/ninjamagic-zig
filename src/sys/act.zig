@@ -1,5 +1,5 @@
 const std = @import("std");
-const core = @import("core");
+const core = @import("../core/module.zig");
 const sig = core.sig;
 
 var counter: usize = 0;
@@ -57,7 +57,7 @@ pub fn step(now: core.Seconds) void {
     }
 }
 
-test "single event fires at end time" {
+test "sys/act.zig: single event fires at end time" {
     init(std.testing.allocator);
     defer deinit();
 

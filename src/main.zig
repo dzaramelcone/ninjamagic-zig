@@ -1,9 +1,9 @@
 const std = @import("std");
-const net = @import("net");
+const net = @import("net/module.zig");
 const db = @import("db.zig");
 const State = @import("state.zig").State;
-const cfg = @import("core").Config;
-const zts = @import("core").zts;
+const cfg = @import("core/Config.zig").Config;
+const zts = @import("core/module.zig").zts;
 
 pub fn main() !void {
     var gpa = std.heap.DebugAllocator(.{ .thread_safe = true }){};

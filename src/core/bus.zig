@@ -77,7 +77,7 @@ pub fn enqueue(signal: sig.Signal) AppendError!void {
     }
 }
 
-test "bus read/write" {
+test "core/bus.zig: simple read and write" {
     try enqueue(.{ .Walk = .{ .source = 1, .dir = .north } });
 
     var it = try walk.flush();

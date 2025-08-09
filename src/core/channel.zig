@@ -24,7 +24,7 @@ pub fn Channel(comptime T: type, N: usize) type {
 
 const cap = std.math.pow(usize, 2, 14);
 
-test "basic queue stuff" {
+test "core/channel.zig: basic queue stuff" {
     var q = Channel(usize, 8){};
     try std.testing.expect(q.push(0));
     try std.testing.expect(q.push(1));
@@ -33,7 +33,7 @@ test "basic queue stuff" {
     for (q.flip()) |_| unreachable;
 }
 
-test "producer overflow returns false" {
+test "core/channel.zig: producer overflow returns false" {
     var chan = Channel(usize, 8){};
     for (0..8) |i| try std.testing.expect(chan.push(i));
     try std.testing.expect(!chan.push(255));
@@ -56,7 +56,7 @@ fn producer(
     _ = left.fetchSub(1, .acq_rel); // signal done
 }
 
-test "soak .2k producers + concurrent consumer" {
+test "core/channel.zig: soak .2k producers + concurrent consumer" {
     const producers = 200;
     const pushes = 200; // per producer
 

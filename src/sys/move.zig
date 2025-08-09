@@ -1,5 +1,5 @@
 const std = @import("std");
-const core = @import("core");
+const core = @import("../core/module.zig");
 const Level = core.Level;
 const Position = core.Position;
 const Self = @This();
@@ -120,7 +120,7 @@ fn walk_helper(p: Position, dir: core.Cardinal, w: usize, h: usize, wraps: bool)
     };
 }
 
-test "system – directional walk validates blocked/out-of-bounds" {
+test "sys/move.zig: directional walk validates blocked/out-of-bounds" {
     try init(std.testing.allocator);
     defer deinit();
     try place(1, .{ .lvl_key = 0, .x = 1, .y = 1 });
@@ -152,7 +152,7 @@ test "system – directional walk validates blocked/out-of-bounds" {
     );
 }
 
-test "system – directional walk wraps on wrapped levels" {
+test "sys/move.zig: directional walk wraps on wrapped levels" {
     try init(std.testing.allocator);
     defer deinit();
     // hack level to wrap
