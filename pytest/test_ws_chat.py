@@ -30,3 +30,4 @@ async def test_chat(golden):
 
         await alice.close()
         await bob.close()
+

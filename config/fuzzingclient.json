@@ -1,0 +1,7 @@
+{
+  "outdir": "/reports",
+  "servers": [
+    { "url": "ws://app:9862", "options": { "failByDrop": false } }
+  ],
+  "cases": ["*"]
+}

@@ -1,5 +1,5 @@
 const std = @import("std");
-
+// zig build -Dtarget=x86_64-linux-gnu
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -20,11 +20,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }).module("pg");
-
-    const ws = b.dependency("websocket", .{
-        .target = target,
-        .optimize = optimize,
-    }).module("websocket");
 
     // Internal deps.
     const embed = b.addModule("embed", .{
@@ -55,11 +50,9 @@ pub fn build(b: *std.Build) void {
 
     core.addImport("zzz", zzz);
     core.addImport("pg", pg);
-    core.addImport("websocket", ws);
 
     net.addImport("zzz", zzz);
     net.addImport("pg", pg);
-    net.addImport("websocket", ws);
     net.addImport("core", core);
     net.addImport("embed", embed);
 
@@ -67,7 +60,6 @@ pub fn build(b: *std.Build) void {
 
     exe_mod.addImport("zzz", zzz);
     exe_mod.addImport("pg", pg);
-    exe_mod.addImport("websocket", ws);
     exe_mod.addImport("core", core);
     exe_mod.addImport("net", net);
     exe_mod.addImport("sys", sys);
@@ -104,11 +96,17 @@ pub fn build(b: *std.Build) void {
         .root_module = sys,
         .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
     });
+    const net_tests = b.addTest(.{
+        .root_module = net,
+        .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
+    });
 
     const run_core_tests = b.addRunArtifact(core_tests);
     const run_sys_tests = b.addRunArtifact(sys_tests);
+    const run_net_tests = b.addRunArtifact(net_tests);
 
     test_step.dependOn(&run_exe_unit_tests.step);
     test_step.dependOn(&run_core_tests.step);
     test_step.dependOn(&run_sys_tests.step);
+    test_step.dependOn(&run_net_tests.step);
 }

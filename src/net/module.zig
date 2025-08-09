@@ -1,7 +1,8 @@
-pub const host_ws = @import("websocket.zig").host;
-pub const host_http = @import("web.zig").host;
-const ws = @import("websocket");
-
+pub const ws = @import("websocket.zig");
+pub const http = @import("web.zig");
+pub const WsHandler = ws.WsHandler;
+pub const host_http = http.host;
+pub const host_ws = ws.host_ws;
 pub const Conn = ws.Conn;
 
 test {
