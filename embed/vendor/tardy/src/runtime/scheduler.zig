@@ -18,6 +18,15 @@ const TaskWithJob = struct {
     job: ?AsyncSubmission = null,
 };
 
+/// Scheduler: cooperatively schedules Tasks (Frames) and brokers async I/O.
+///
+/// - Tracks runnable vs waiting tasks via a dense pool + bitsets.
+/// - `io_await` moves the current task to wait_for_io and yields; completions mark it runnable.
+/// - `trigger_await` is a lightweight software wait primitive (not I/O-backed).
+///
+/// Compared to work-stealing schedulers, this design is simpler, predictable,
+/// and per-thread. It avoids cross-thread task migration but requires the user
+/// to balance load if needed.
 pub const Scheduler = struct {
     allocator: std.mem.Allocator,
     tasks: Pool(Task),
@@ -57,6 +66,8 @@ pub const Scheduler = struct {
         self.runnable += 1;
     }
 
+    /// Put the current task to sleep waiting for a software trigger.
+    /// Use `Runtime.trigger(idx)` from another thread to wake it.
     pub fn trigger_await(self: *Scheduler) !void {
         const rt: *Runtime = @fieldParentPtr("scheduler", self);
         const index = rt.current_task.?;
@@ -75,7 +86,9 @@ pub const Scheduler = struct {
         try self.triggers.set(index);
     }
 
-    // This is only safe to call from the Runtime that the Frame is running on.
+    /// Await an async I/O `job`: moves the current task to `wait_for_io`,
+    /// enqueues the job on the Async runner, and yields.
+    /// Only call from the owning Runtime thread; it assumes `current_task` is set.
     pub fn io_await(self: *Scheduler, job: AsyncSubmission) !void {
         const rt: *Runtime = @fieldParentPtr("scheduler", self);
         const index = rt.current_task.?;
@@ -90,6 +103,7 @@ pub const Scheduler = struct {
         Frame.yield();
     }
 
+    /// Create a new Frame and make it runnable.
     pub fn spawn(self: *Scheduler, frame_ctx: anytype, comptime frame_fn: anytype, stack_size: usize) !void {
         const index = blk: {
             if (self.released.pop()) |index| {

@@ -62,6 +62,8 @@ pub const State = struct {
             };
             const c = conn;
             self.conns_mutex.unlock();
+            const peek_len: usize = @min(pkt.body.len, 120);
+            std.log.info("WS send id={d} len={d} peek={s}", .{ pkt.recipient, pkt.body.len, pkt.body[0..peek_len] });
             // Schedule write on the connection's runtime to avoid calling
             // Tardy I/O from a non-runtime thread.
             try c.writeAsync(pkt.body);
@@ -78,11 +80,6 @@ pub const State = struct {
         self.conns_mutex.lock();
         try self.conns.put(id, c);
         self.conns_mutex.unlock();
-        // Optionally send a small greeting so basic websocket clients
-        // like websocat see immediate output.
-        c.write("Welcome to MUD\n") catch |err| {
-            std.log.warn("greeting write failed: {s}", .{@errorName(err)});
-        };
     }
 
     pub fn onDisconnect(self: *State, id: usize) void {

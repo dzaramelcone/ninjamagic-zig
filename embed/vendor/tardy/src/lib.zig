@@ -1,3 +1,20 @@
+/// Tardy: a minimal async runtime for Zig.
+///
+/// High level
+/// - Stackful coroutines ("Frames") for direct-style async code.
+/// - A per-thread `Runtime` with a cooperative scheduler; no work-stealing.
+/// - Pluggable async backends (epoll/kqueue/poll/io_uring) selected at build/runtime.
+/// - Thin, explicit OS wrappers for sockets/files/timers.
+///
+/// Design intent vs. Tokio (Rust)
+/// - Tardy is stackful + cooperative; Tokio is stackless futures + poll-based executors.
+/// - Tardy favors simplicity and explicit control; Tokio provides rich ecosystem and work-stealing.
+/// - Tardy requires user synchronization for shared state and thread-affinity; Tokio often hides this in its executors.
+///
+/// Trade-offs
+/// - Pros: direct style, tiny surface area, easy to reason about, small overhead.
+/// - Cons: per-task stacks, no preemption, manual load balancing, user-managed synchronization.
+///
 const std = @import("std");
 const builtin = @import("builtin");
 const assert = std.debug.assert;
@@ -91,6 +108,8 @@ const TardyOptions = struct {
     size_aio_reap_max: usize = 1024,
 };
 
+/// Create a concrete Tardy type bound to a chosen async backend.
+/// `.auto` selects a sensible default per-OS.
 pub fn Tardy(comptime selected_aio_type: AsyncType) type {
     const aio_type: AsyncType = comptime if (selected_aio_type == .auto)
         auto_async_match()
@@ -105,6 +124,7 @@ pub fn Tardy(comptime selected_aio_type: AsyncType) type {
         options: TardyOptions,
         mutex: std.Thread.Mutex = .{},
 
+        /// Initialize the Tardy container (not the per-thread Runtimes).
         pub fn init(allocator: std.mem.Allocator, options: TardyOptions) !Self {
             log.debug("aio backend: {s}", .{@tagName(aio_type)});
 
@@ -121,6 +141,7 @@ pub fn Tardy(comptime selected_aio_type: AsyncType) type {
         }
 
         /// This will spawn a new Runtime.
+        /// Create a new Runtime bound to an Async runner and attach its completion ring.
         fn spawn_runtime(self: *Self, id: usize, options: AsyncOptions) !Runtime {
             self.mutex.lock();
             defer self.mutex.unlock();
@@ -157,6 +178,9 @@ pub fn Tardy(comptime selected_aio_type: AsyncType) type {
         ///
         /// The provided allocator is meant to just initialize any structures that will exist throughout the lifetime
         /// of the runtime. It happens in an arena and is cleaned up after the runtime terminates.
+        /// Spawn 1..N runtimes (threads) and enter user code on each.
+        /// The user entry function should set up long-lived frames and return;
+        /// the runtime loop then takes over and cooperatively schedules tasks.
         pub fn entry(
             self: *Self,
             entry_params: anytype,

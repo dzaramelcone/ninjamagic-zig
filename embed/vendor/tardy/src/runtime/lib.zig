@@ -20,8 +20,17 @@ const RuntimeOptions = struct {
     size_aio_reap_max: usize,
 };
 
-/// A runtime is what runs tasks and handles the Async I/O.
-/// Every thread should have an independent Runtime.
+/// Runtime: owns a scheduler and an Async I/O runner on a single OS thread.
+///
+/// Responsibilities
+/// - Run and cooperatively schedule stackful Frames (Tasks) on this thread.
+/// - Queue and reap async I/O jobs; wake/trigger tasks when I/O completes.
+/// - Provide cross-thread wake/trigger for light signaling.
+///
+/// Notes vs. Tokio
+/// - No work-stealing: tasks stay on the runtime where they were spawned.
+/// - Cooperative: tasks must yield (usually via I/O) for fairness; no preemption.
+/// - Simpler mental model; users handle synchronization and thread-affinity.
 pub const Runtime = struct {
     allocator: std.mem.Allocator,
     storage: Storage,
@@ -52,6 +61,7 @@ pub const Runtime = struct {
         };
     }
 
+    /// Tear down storage, scheduler, and the async runner.
     pub fn deinit(self: *Runtime) void {
         self.storage.deinit();
         self.scheduler.deinit();
@@ -59,14 +69,12 @@ pub const Runtime = struct {
         self.aio.deinit(self.allocator);
     }
 
-    /// Wake the given Runtime.
-    /// Safe to call from a different Runtime.
+    /// Wake the Runtime (cross-thread safe). Used to nudge the loop after triggers.
     pub fn wake(self: *Runtime) !void {
         if (self.running) try self.aio.wake();
     }
 
-    /// Trigger a waiting (`.wait_for_trigger`) Task.
-    /// Safe to call from a different Runtime.
+    /// Trigger a waiting (`.wait_for_trigger`) Task (cross-thread safe).
     pub fn trigger(self: *Runtime, index: usize) !void {
         if (self.running) {
             log.debug("{d} - triggering {d}", .{ self.id, index });
@@ -75,8 +83,7 @@ pub const Runtime = struct {
         }
     }
 
-    /// Stop the given Runtime.
-    /// Safe to call from a different Runtime.
+    /// Stop the event loop (cross-thread safe). Remaining tasks will be cleaned up.
     pub fn stop(self: *Runtime) void {
         if (self.running) {
             self.running = false;
@@ -84,7 +91,8 @@ pub const Runtime = struct {
         }
     }
 
-    /// Spawns a new Frame. This creates a new heap-allocated stack for the Frame to run.
+    /// Spawn a new Frame (stackful coroutine) on this Runtime.
+    /// A heap-allocated stack is created per frame.
     pub fn spawn(
         self: *Runtime,
         frame_ctx: anytype,
@@ -94,6 +102,7 @@ pub const Runtime = struct {
         try self.scheduler.spawn(frame_ctx, frame_fn, stack_size);
     }
 
+    /// Run a single task until it yields/completes/errors.
     fn run_task(self: *Runtime, task: *Task) !void {
         self.current_task = task.index;
 
@@ -127,6 +136,7 @@ pub const Runtime = struct {
         }
     }
 
+    /// Drive the scheduler until there are no runnable tasks or `stop()` is called.
     pub fn run(self: *Runtime) !void {
         defer self.running = false;
         self.running = true;

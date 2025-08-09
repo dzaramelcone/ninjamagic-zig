@@ -69,10 +69,29 @@ pub const Conn = struct {
         // Copy payload into the runtime allocator so it outlives the caller.
         const out_buf = try self.rt.allocator.alloc(u8, data.len);
         @memcpy(out_buf, data);
-        try self.rt.spawn(.{ self.rt, self, out_buf }, struct {
-            fn send_task(rt: *Runtime, conn: *Conn, payload: []u8) !void {
+        const sock_copy = self.socket; // copy by value to avoid UAF on Conn*
+        const rt_ptr = self.rt;
+        try self.rt.spawn(.{ rt_ptr, sock_copy, out_buf }, struct {
+            fn send_task(rt: *Runtime, sock_val: Socket, payload: []u8) !void {
                 defer rt.allocator.free(payload);
-                conn.write(payload) catch {};
+                // Build a text frame header and send directly via socket.
+                var header: [10]u8 = undefined;
+                header[0] = 0x80 | 0x1; // FIN + text
+                var header_len: usize = 2;
+                if (payload.len < 126) {
+                    header[1] = @intCast(payload.len);
+                } else if (payload.len <= 0xFFFF) {
+                    header[1] = 126;
+                    std.mem.writeInt(u16, header[2..4], @intCast(payload.len), .big);
+                    header_len = 4;
+                } else {
+                    header[1] = 127;
+                    std.mem.writeInt(u64, header[2..10], @intCast(payload.len), .big);
+                    header_len = 10;
+                }
+                var w = sock_val.writer(rt);
+                w.writeAll(header[0..header_len]) catch return;
+                if (payload.len > 0) _ = w.write(payload) catch return;
             }
         }.send_task, 16 * 1024);
     }
@@ -141,6 +160,8 @@ const Session = struct {
     }
 
     fn clientMessage(self: *Session, raw: []const u8) !void {
+        const peek_len: usize = @min(raw.len, 64);
+        std.log.info("WS recv id={d} len={d} peek={s}", .{ self.id, raw.len, raw[0..peek_len] });
         self.handler.onMessage(self.handler.ctx, self.id, raw) catch |err| try self.conn.write(@errorName(err));
     }
 
