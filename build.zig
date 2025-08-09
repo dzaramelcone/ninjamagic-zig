@@ -1,5 +1,5 @@
 const std = @import("std");
-
+// zig build -Dtarget=x86_64-linux-gnu
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -20,7 +20,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     }).module("pg");
-
 
     // Internal deps.
     const embed = b.addModule("embed", .{
