@@ -1,5 +1,5 @@
 const std = @import("std");
-const core = @import("core");
+const core = @import("../core/module.zig");
 const ws = @import("websocket");
 var clients: std.AutoArrayHashMap(usize, *ws.Conn) = undefined;
 
@@ -37,7 +37,7 @@ pub fn iter() Iter {
     return clients.iterator();
 }
 
-test "basic client tracking" {
+test "sys/client.zig: basic client tracking" {
     init(std.testing.allocator);
     defer deinit();
     try std.testing.expect(list().len == 0);

@@ -1,6 +1,6 @@
 const std = @import("std");
-const core = @import("core");
-const sys = @import("sys");
+const core = @import("core/module.zig");
+const sys = @import("sys/module.zig");
 const ws = @import("websocket");
 
 const Channel = core.Channel(core.sig.Signal, std.math.pow(usize, 2, 10));

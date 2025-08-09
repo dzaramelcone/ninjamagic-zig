@@ -3,7 +3,7 @@ const zqlite = @import("zqlite");
 const Users = @import("./db/sqlc-out/queries.sql.zig").PoolQuerier;
 const schema = @embedFile("./db/schema.sql");
 
-test "basic queries" {
+test "db.zig: basic queries" {
     const allocator = std.testing.allocator;
     var pool = try zqlite.Pool.init(allocator, .{
         .size = 5,

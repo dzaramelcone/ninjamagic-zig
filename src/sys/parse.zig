@@ -1,5 +1,5 @@
 const std = @import("std");
-const core = @import("core");
+const core = @import("../core/module.zig");
 const Request = core.sig.Request;
 const Signal = core.sig.Signal;
 
@@ -121,7 +121,7 @@ const parsers = .{
     W,
     NW,
 };
-test "basic verbs and error cases" {
+test "sys/parse.zig: basic verbs and error cases" {
     try std.testing.expectError(error.NoInput, parse(.{ .user = 0, .text = "" }));
 
     {

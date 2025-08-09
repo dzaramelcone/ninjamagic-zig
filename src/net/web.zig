@@ -1,7 +1,7 @@
 const std = @import("std");
 const zzz = @import("zzz");
 const embed = @import("embed");
-const cfg = @import("core").Config.Zzz;
+const cfg = @import("../core/Config.zig").Config.Zzz;
 
 const Tardy = zzz.tardy.Tardy(.auto);
 const Runtime = zzz.tardy.Runtime;

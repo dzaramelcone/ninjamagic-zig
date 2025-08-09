@@ -1,4 +1,4 @@
-const core = @import("core");
+const core = @import("../core/module.zig");
 const std = @import("std");
 const zts = core.zts;
 const client = @import("client.zig");
@@ -48,7 +48,7 @@ fn handleSay(em: core.sig.Emit, alloc: std.mem.Allocator) !void {
     }
 }
 
-test "say emits correct packets for sight-based reach" {
+test "sys/emit.zig: sight: say emits correct packets" {
     var arena_allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();

@@ -1,5 +1,5 @@
 const std = @import("std");
-const core = @import("core");
+const core = @import("../core/module.zig");
 const zts = core.zts;
 const Packet = struct { recipient: usize, body: []const u8 };
 
@@ -72,7 +72,7 @@ pub const OutIter = struct {
         return pkt;
     }
 };
-test "render compact JSON, bundle packets" {
+test "sys/outbox.zig: render compact JSON, bundle packets" {
     var arena_allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_allocator.deinit();
     const arena = arena_allocator.allocator();

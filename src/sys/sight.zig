@@ -1,7 +1,7 @@
 const std = @import("std");
-const core = @import("core");
+const core = @import("../core/module.zig");
 const sig = core.sig;
-const net = @import("net");
+const net = @import("../net/module.zig");
 const move = @import("move.zig");
 
 const VIEW_RADIUS: usize = 7; // tweak later
@@ -70,7 +70,7 @@ pub fn step() void {
     }
 }
 
-test "sight.step emits symmetrical In/Out events" {
+test "sys/sight.zig: step emits symmetrical events" {
     try move.init(std.testing.allocator);
     defer move.deinit();
 

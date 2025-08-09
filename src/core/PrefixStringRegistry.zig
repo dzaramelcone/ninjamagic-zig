@@ -44,7 +44,7 @@ pub const PrefixStringRegistry = struct {
     }
 };
 
-test "Registry upsert / idOf / matchPrefix" {
+test "core/PrefixStringRegistry.zig: upsert / idOf / matchPrefix" {
     const gpa = std.testing.allocator;
 
     var reg = PrefixStringRegistry.init(gpa);
@@ -75,7 +75,7 @@ test "Registry upsert / idOf / matchPrefix" {
     try std.testing.expectEqual(@as(?u16, null), reg.matchPrefix("z"));
 }
 
-test "Registry – fuzz round-trip" {
+test "core/PrefixStringRegistry.zig: round-trip fuzz" {
     const gpa = std.testing.allocator;
     var reg = PrefixStringRegistry.init(gpa);
     defer reg.deinit();

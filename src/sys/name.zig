@@ -1,5 +1,5 @@
 const std = @import("std");
-const core = @import("core");
+const core = @import("../core/module.zig");
 
 var names: std.AutoArrayHashMap(usize, []const u8) = undefined;
 var alloc: std.mem.Allocator = undefined;
