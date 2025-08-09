@@ -50,7 +50,7 @@ pub fn step(now: core.Seconds) void {
         if (evt.end > now) break;
         const act = actions.get(evt.owner) orelse continue;
         if (act.id != evt.id) continue;
-        defer _ = actions.remove(evt.owner);
+        defer _ = actions.swapRemove(evt.owner);
         defer _ = events.remove();
 
         core.bus.enqueue(act.on_execute) catch break;
