@@ -67,7 +67,7 @@ pub const State = struct {
     }
 
     pub fn onDisconnect(self: *State, id: usize) void {
-        if (self.conns.remove(id)) std.log.debug("{d} disconnected.", .{id});
+        if (self.conns.swapRemove(id)) std.log.debug("{d} disconnected.", .{id});
     }
 
     pub fn broadcast(self: *State, text: []const u8) !void {
