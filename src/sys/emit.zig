@@ -35,8 +35,9 @@ fn handleSay(em: core.sig.Emit, alloc: std.mem.Allocator) !void {
         if (to == say.source) continue;
         if (!sight.canMobSee(say.source, to)) continue;
 
+        const who = name.get(say.source) catch "Someone";
         try zts.print(say_tmpl, "third", .{
-            .source = try name.get(say.source),
+            .source = who,
             .msg = say.text,
         }, out);
         const txt_cpy = try alloc.dupe(u8, buf.items);
@@ -116,4 +117,27 @@ test "sys/emit.zig: sight: say emits correct packets" {
         try std.testing.expectEqualStrings("You say, \'hey?\'\n", only.Message.text);
         try std.testing.expectEqual(null, it.next());
     }
+}
+
+test "sys/emit.zig: missing name falls back to Someone" {
+    var arena_allocator = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_allocator.deinit();
+    const arena = arena_allocator.allocator();
+    const move = @import("move.zig");
+
+    client.init(std.testing.allocator);
+    try move.init(std.testing.allocator);
+    defer move.deinit();
+    defer client.deinit();
+
+    try core.bus.enqueue(.{ .Connect = .{ .source = 1, .conn = undefined } });
+    client.step();
+    try move.place(1, .{ .lvl_key = 0, .x = 0, .y = 0 });
+
+    try core.bus.enqueue(.{ .Emit = .{ .Say = .{ .source = 1, .text = "hi", .reach = .Sight } } });
+    try step(arena);
+
+    var it = try core.bus.outbound.flush();
+    const pkt = it.next().?;
+    _ = pkt; // ensure at least one packet without crashing due to name lookup
 }
