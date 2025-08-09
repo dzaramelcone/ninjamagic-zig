@@ -3,8 +3,8 @@ const zqlite = @import("zqlite");
 const Users = @import("./db/sqlc-out/queries.sql.zig").PoolQuerier;
 const schema = @embedFile("./db/schema.sql");
 
-pub fn doQueries(alloc: std.mem.Allocator) !void {
-    const allocator = alloc;
+test "basic queries" {
+    const allocator = std.testing.allocator;
     var pool = try zqlite.Pool.init(allocator, .{
         .size = 5,
         .path = "./test.db",
@@ -22,21 +22,23 @@ pub fn doQueries(alloc: std.mem.Allocator) !void {
 
     const querier = Users.init(allocator, pool);
 
-    querier.createUser(.{
-        .name = "admin",
-        .email = "admin@example.com",
-        .password = "password",
-        .salary = 1000.50,
+    querier.createUserFromOAuth(.{
+        .name = "root",
+        .email = "admin@admin.com",
+        .email_verified = 1,
+        .ip_address = "127.0.0.1",
+        .role = "admin",
     }) catch |err| switch (err) {
         error.ConstraintUnique => std.debug.print("Someone with that e-mail already exists.\n", .{}),
         else => return err,
     };
 
-    querier.createUser(.{
+    querier.createUserFromOAuth(.{
         .name = "user",
-        .email = "user@example.com",
-        .password = "password",
-        .salary = 1000.50,
+        .email = "user@user.com",
+        .email_verified = 1,
+        .ip_address = "127.0.0.1",
+        .role = "user",
     }) catch |err| switch (err) {
         error.ConstraintUnique => std.debug.print("Someone with that e-mail already exists.\n", .{}),
         else => return err,
@@ -46,7 +48,7 @@ pub fn doQueries(alloc: std.mem.Allocator) !void {
     defer by_id.deinit();
     std.debug.print("{d}: {s}\n", .{ by_id.id, by_id.email });
 
-    const by_email = try querier.getUserByEmail("admin@example.com");
+    const by_email = try querier.getUserByEmail("user@user.com");
     defer by_email.deinit();
     std.debug.print("{d}: {s}\n", .{ by_email.id, by_email.email });
 }

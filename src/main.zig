@@ -10,8 +10,6 @@ pub fn main() !void {
     const alloc = gpa.allocator();
     defer _ = gpa.deinit();
 
-    try db.doQueries(alloc);
-
     var http = try std.Thread.spawn(.{}, net.host_http, .{alloc});
     defer http.join();
     var state = try State.init(alloc);
