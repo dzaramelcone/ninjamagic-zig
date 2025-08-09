@@ -25,20 +25,26 @@ fn toPlayer(user: usize, err: ParseError) Signal {
 }
 
 pub fn parse(req: Request) error{NoInput}!Signal {
-    const input = req.text;
+    var input = std.mem.trim(u8, req.text, " \t\r\n");
     if (input.len > 0 and input[0] == '\'') {
         return Say.parse(req.user, input[1..]) catch |err| toPlayer(req.user, err);
     }
 
     var tokens = std.mem.tokenizeScalar(u8, input, ' ');
     const first = tokens.next() orelse return error.NoInput;
-    const rest = if (req.text.len == first.len) "" else req.text[first.len + 1 ..];
+    const rest = if (input.len == first.len) "" else input[first.len + 1 ..];
     inline for (parsers) |P| if (matches(P, first)) {
         ensureParser(P);
         return P.parse(req.user, rest) catch |err| toPlayer(req.user, err);
     };
 
     return toPlayer(req.user, error.UnknownVerb);
+}
+
+test "sys/parse.zig: leading spaces before 'say are accepted" {
+    const got = try parse(.{ .user = 1, .text = "   'hi" });
+    try std.testing.expect(got == .Emit);
+    try std.testing.expectEqualStrings("hi", got.Emit.Say.text);
 }
 
 fn matches(cmd: anytype, word: []const u8) bool {
