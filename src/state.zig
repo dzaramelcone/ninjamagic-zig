@@ -23,7 +23,6 @@ pub const State = struct {
     }
 
     pub fn deinit(self: *State) void {
-        self.conns.deinit();
         self.alloc.destroy(self);
     }
 
@@ -75,8 +74,8 @@ pub const State = struct {
         while (!self.channel.push(.{ .Disconnect = .{ .source = id } })) std.atomic.spinLoopHint();
     }
 
-    pub fn broadcast(self: *State, text: []const u8) !void {
-        var it = self.conns.iterator();
+    pub fn broadcast(_: *State, text: []const u8) !void {
+        var it = sys.client.iter();
         while (it.next()) |kv| {
             const id = kv.key_ptr.*;
             const conn = kv.value_ptr.*;

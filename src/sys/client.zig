@@ -23,11 +23,18 @@ pub fn step() void {
         _ = clients.swapRemove(disconnect.source);
     }
 }
+
 pub fn get(id: usize) ?*ws.Conn {
     return clients.get(id);
 }
+
 pub fn list() []usize {
     return clients.keys();
+}
+
+pub const Iter = std.AutoArrayHashMap(usize, *ws.Conn).Iterator;
+pub fn iter() Iter {
+    return clients.iterator();
 }
 
 test "basic client tracking" {
