@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const exe_mod = b.createModule(.{
+    const main = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
@@ -16,17 +16,23 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }).module("zzz");
 
-    const pg = b.dependency("pg", .{
-        .target = target,
-        .optimize = optimize,
-    }).module("pg");
-
     const ws = b.dependency("websocket", .{
         .target = target,
         .optimize = optimize,
     }).module("websocket");
 
-    // Internal deps.
+    const zqlite = b.dependency("zqlite", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("zqlite");
+
+    main.addCSourceFile(.{
+        .file = b.path("embed/sqlite/sqlite3.c"),
+        .flags = &[_][]const u8{"-std=c99"},
+    });
+    main.link_libc = true;
+
+    // lib.
     const embed = b.addModule("embed", .{
         .root_source_file = b.path("embed/module.zig"),
         .target = target,
@@ -54,26 +60,25 @@ pub fn build(b: *std.Build) void {
     embed.addImport("zzz", zzz);
 
     core.addImport("zzz", zzz);
-    core.addImport("pg", pg);
     core.addImport("websocket", ws);
 
     net.addImport("zzz", zzz);
-    net.addImport("pg", pg);
     net.addImport("websocket", ws);
     net.addImport("core", core);
     net.addImport("embed", embed);
 
     sys.addImport("core", core);
+    sys.addImport("websocket", ws);
 
-    exe_mod.addImport("zzz", zzz);
-    exe_mod.addImport("pg", pg);
-    exe_mod.addImport("websocket", ws);
-    exe_mod.addImport("core", core);
-    exe_mod.addImport("net", net);
-    exe_mod.addImport("sys", sys);
+    main.addImport("zzz", zzz);
+    main.addImport("websocket", ws);
+    main.addImport("zqlite", zqlite);
+    main.addImport("core", core);
+    main.addImport("net", net);
+    main.addImport("sys", sys);
     const exe = b.addExecutable(.{
         .name = "mud",
-        .root_module = exe_mod,
+        .root_module = main,
     });
     b.installArtifact(exe);
 
@@ -86,7 +91,7 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const tests = b.addTest(.{
-        .root_module = exe_mod,
+        .root_module = main,
         .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
     });
     tests.root_module.addImport("core", core);

@@ -7,25 +7,22 @@ const Channel = core.Channel(core.sig.Signal, std.math.pow(usize, 2, 10));
 
 pub const State = struct {
     alloc: std.mem.Allocator,
-
     now: core.Seconds,
-
-    conns: std.AutoArrayHashMap(usize, *ws.Conn),
     channel: Channel,
 
     pub fn init(alloc: std.mem.Allocator) !State {
+        sys.client.init(alloc);
         try sys.move.init(alloc);
         sys.act.init(alloc);
+
         return .{
             .alloc = alloc,
             .now = 0,
-            .conns = std.AutoArrayHashMap(usize, *ws.Conn).init(alloc),
             .channel = Channel{},
         };
     }
 
     pub fn deinit(self: *State) void {
-        self.conns.deinit();
         self.alloc.destroy(self);
     }
 
@@ -38,6 +35,8 @@ pub const State = struct {
         for (self.channel.flip()) |sig| {
             core.bus.enqueue(sig) catch continue;
         }
+        // Update client list.
+        sys.client.step();
 
         // Handle actions.
         sys.act.step(self.now);
@@ -45,14 +44,16 @@ pub const State = struct {
         // Handle moves.
         sys.move.step();
 
+        // Update LOS.
         sys.sight.step();
 
+        // Emit messages.
         try sys.emit.step(arena);
 
         // Send all pending packets to clients.
         var it = try sys.outbox.flush(arena);
         while (it.next()) |pkt| {
-            const conn = self.conns.get(pkt.recipient) orelse continue;
+            const conn = sys.client.get(pkt.recipient) orelse continue;
             try conn.write(pkt.body);
         }
     }
@@ -63,15 +64,18 @@ pub const State = struct {
     }
 
     pub fn onConnect(self: *State, id: usize, c: *ws.Conn) !void {
-        try self.conns.put(id, c);
+        if (!self.channel.push(.{ .Connect = .{
+            .source = id,
+            .conn = c,
+        } })) return error.ServerBacklogged;
     }
 
     pub fn onDisconnect(self: *State, id: usize) void {
-        if (self.conns.remove(id)) std.log.debug("{d} disconnected.", .{id});
+        while (!self.channel.push(.{ .Disconnect = .{ .source = id } })) std.atomic.spinLoopHint();
     }
 
-    pub fn broadcast(self: *State, text: []const u8) !void {
-        var it = self.conns.iterator();
+    pub fn broadcast(_: *State, text: []const u8) !void {
+        var it = sys.client.iter();
         while (it.next()) |kv| {
             const id = kv.key_ptr.*;
             const conn = kv.value_ptr.*;

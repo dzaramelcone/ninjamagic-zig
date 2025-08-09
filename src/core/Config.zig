@@ -1,5 +1,4 @@
 const websocket = @import("websocket");
-const pg = @import("pg");
 const zzz = @import("zzz");
 
 // This is what env vars look like:
@@ -12,19 +11,6 @@ const zzz = @import("zzz");
 
 pub const Config = struct {
     pub const tps: f64 = 200;
-    pub const Pg: pg.Pool.Opts = .{
-        .size = 1,
-        .connect = .{
-            .port = 5432,
-            .host = "db",
-        },
-        .auth = .{
-            .username = "ziguser",
-            .password = "zigpass",
-            .database = "zigdb",
-            .timeout = 10_000,
-        },
-    };
 
     pub const Ws: websocket.server.Config = .{
         .address = "0.0.0.0",

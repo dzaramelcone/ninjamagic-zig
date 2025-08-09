@@ -7,7 +7,7 @@ plugins:
 sql:
   - schema: src/db/schema.sql
     queries: src/db/queries.sql
-    engine: postgresql
+    engine: sqlite
     codegen:
       - out: src/db/sqlc-out
         plugin: zig

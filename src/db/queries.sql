@@ -2,31 +2,26 @@
 SELECT * FROM users;
 
 -- name: GetUser :one
-SELECT * FROM users
-WHERE id = $1 LIMIT 1;
-
+SELECT * FROM users WHERE id = ? LIMIT 1;
 -- name: GetUserByEmail :one
-SELECT * FROM users
-WHERE email = $1 LIMIT 1;
+-- If you want case-insensitive lookups, add "COLLATE NOCASE" to the WHERE or to the column definition.
+SELECT * FROM users WHERE email = ? LIMIT 1;
 
--- name: GetUsersByRole :many
-SELECT * FROM users
-WHERE role = $1;
+-- name: GetUserByIdentity :one
+SELECT u.* FROM users u
+JOIN user_identities i ON i.user_id = u.id
+WHERE i.provider = ? AND i.provider_user_id = ?
+LIMIT 1;
 
--- name: GetUserSalaries :many
-SELECT id, email, salary FROM users
-WHERE salary >= sqlc.arg(minimum) AND salary <= sqlc.arg(maximum);
+-- name: CreateUserFromOAuth :exec
+INSERT INTO users (email, email_verified, name, role, ip_address)
+VALUES (?, ?, ?, ?, ?);
 
--- name: CreateUser :exec
-INSERT INTO users (
-    name, 
-    email, 
-    password, 
-    role, 
-    ip_address,
-    salary,
-    created_at,
-    updated_at
-) VALUES (
-    $1, $2, $3, $4, $5, $6, NOW(), NOW()
-);
+-- name: LinkIdentity :exec
+INSERT INTO user_identities (user_id, provider, provider_user_id)
+VALUES (?, ?, ?)
+ON CONFLICT(provider, provider_user_id) DO NOTHING;
+
+-- name: TouchLastLogin :exec
+UPDATE users SET last_login_at = CURRENT_TIMESTAMP, last_login_ip = ?
+WHERE id = ?;

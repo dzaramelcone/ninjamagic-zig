@@ -1,8 +1,7 @@
 const std = @import("std");
 const ws = @import("websocket");
-const cfg = @import("core").Config;
-
-var next_id: std.atomic.Value(usize) = .{ .raw = 1 };
+const core = @import("core");
+const cfg = core.Config;
 
 pub fn Handler(comptime T: type) type {
     return struct {
@@ -12,7 +11,7 @@ pub fn Handler(comptime T: type) type {
 
         pub fn init(h: *const ws.Handshake, conn: *ws.Conn, impl: *T) !@This() {
             _ = h; // (custom checks here, like session token)
-            const id = next_id.fetchAdd(1, .monotonic);
+            const id = core.getId();
             try impl.onConnect(id, conn);
             return .{ .impl = impl, .conn = conn, .id = id };
         }
