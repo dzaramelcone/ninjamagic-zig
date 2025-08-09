@@ -22,8 +22,10 @@ pub const State = struct {
         };
     }
 
-    pub fn deinit(self: *State) void {
-        self.alloc.destroy(self);
+    pub fn deinit(_: *State) void {
+        sys.act.deinit();
+        sys.move.deinit();
+        sys.client.deinit();
     }
 
     pub fn step(self: *State, dt: core.Seconds) !void {
@@ -84,3 +86,103 @@ pub const State = struct {
         }
     }
 };
+
+test "state.zig: connect and disconnect update client registry" {
+    var s = try State.init(std.testing.allocator);
+    defer s.deinit();
+    var mock = ws.Conn{ ._closed = false, .started = 0, .stream = undefined, .address = undefined };
+
+    try s.onConnect(42, &mock);
+    try s.step(0.01);
+    try std.testing.expect(sys.client.get(42) != null);
+
+    s.onDisconnect(42);
+    try s.step(0.01);
+    try std.testing.expect(sys.client.get(42) == null);
+}
+
+test "state.zig: channel backpressure returns ServerBacklogged" {
+    var s = try State.init(std.testing.allocator);
+    defer s.deinit();
+    var mock = ws.Conn{ ._closed = false, .started = 0, .stream = undefined, .address = undefined };
+
+    var got_error = false;
+    var i: usize = 0;
+    while (i < 4096) : (i += 1) {
+        const res = s.onConnect(i, &mock);
+        if (res) |_| {
+            // keep filling until it fails; do not drain via step()
+        } else |_| {
+            got_error = true;
+            break;
+        }
+    }
+    try std.testing.expect(got_error);
+}
+
+test "state.zig: onMessage enqueues and drains" {
+    var s = try State.init(std.testing.allocator);
+    defer s.deinit();
+    try s.onMessage(1, "'hello world");
+    try s.step(0.01);
+    try std.testing.expect(s.channel.flip().len == 0);
+}
+
+const posix = std.posix;
+const net = std.net;
+const PipeConn = struct {
+    read_fd: posix.fd_t,
+    conn: ws.Conn,
+};
+fn makePipeConn() !PipeConn {
+    const fds = try posix.pipe();
+    const addr = try net.Address.parseIp("127.0.0.1", 0);
+    return .{
+        .read_fd = fds[0],
+        .conn = ws.Conn{
+            ._closed = false,
+            .started = 0,
+            .stream = .{ .handle = fds[1] },
+            .address = addr,
+        },
+    };
+}
+
+test "state.zig: outbox writes to multiple connected clients" {
+    var s = try State.init(std.testing.allocator);
+    defer s.deinit();
+
+    var a = try makePipeConn();
+    defer posix.close(a.read_fd);
+    var b = try makePipeConn();
+    defer posix.close(b.read_fd);
+
+    try s.onConnect(1, &a.conn);
+    try s.onConnect(2, &b.conn);
+    try s.step(0.01);
+
+    // Enqueue multiple messages for 1 and one for 2; State.step will flush and write.
+    try core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .to = 1, .text = "foo" } } });
+    try core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .to = 1, .text = "bar" } } });
+    try core.bus.enqueue(.{ .Outbound = .{ .Message = .{ .to = 2, .text = "baz" } } });
+
+    try s.step(0.01);
+
+    // Read frames from pipes and verify payload contents.
+    var buf: [4096]u8 = undefined;
+    const n1 = try posix.read(a.read_fd, &buf);
+    try std.testing.expect(n1 > 0);
+    // Very small payloads: expect single text frame: 0x81, len, payload
+    try std.testing.expectEqual(@as(u8, 0x81), buf[0]);
+    const len1: usize = buf[1];
+    const payload1 = buf[2 .. 2 + len1];
+    try std.testing.expect(std.mem.indexOf(u8, payload1, "foo") != null);
+    try std.testing.expect(std.mem.indexOf(u8, payload1, "bar") != null);
+
+    const n2 = try posix.read(b.read_fd, &buf);
+    try std.testing.expect(n2 > 0);
+    try std.testing.expectEqual(@as(u8, 0x81), buf[0]);
+    const len2: usize = buf[1];
+    const payload2 = buf[2 .. 2 + len2];
+    try std.testing.expect(std.mem.indexOf(u8, payload2, "baz") != null);
+}

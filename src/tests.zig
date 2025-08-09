@@ -13,5 +13,6 @@ test {
 
     // DB tests (direct file import).
     std.testing.refAllDecls(@import("db.zig"));
+    // State tests.
+    std.testing.refAllDecls(@import("state.zig"));
 }
-
