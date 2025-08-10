@@ -1,3 +1,4 @@
+//! Entry point for the MUD prototype. Spawns network servers and drives the game tick loop.
 const std = @import("std");
 const net = @import("net/module.zig");
 const db = @import("db.zig");
@@ -5,6 +6,7 @@ const State = @import("state.zig").State;
 const cfg = @import("core/Config.zig").Config;
 const zts = @import("core/module.zig").zts;
 
+/// Boot the HTTP & WebSocket servers and run the fixed-rate loop.
 pub fn main() !void {
     var gpa = std.heap.DebugAllocator(.{ .thread_safe = true }){};
     const alloc = gpa.allocator();

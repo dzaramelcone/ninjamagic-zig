@@ -1,3 +1,4 @@
+//! Definitions of signals exchanged between systems and the network layer.
 const Cardinal = @import("util.zig").Cardinal;
 const Position = @import("level.zig").Position;
 const ws = @import("websocket");
