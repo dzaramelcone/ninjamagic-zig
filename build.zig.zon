@@ -45,6 +45,10 @@
             .url = "git+https://github.com/karlseguin/websocket.zig?ref=master#10b0e7be2158ff22733f1e59c1ae0bace5bf3a0c",
             .hash = "websocket-0.1.0-ZPISdbhVAwCL-zrOIFLKLr6CHtwV92raAnObudtbYQjJ",
         },
+        .oauth2 = .{
+            .url = "git+https://github.com/aw1875/oauth2.zig#cdb3538da5ef1e4e125e7f5e9042e04e65004a0d",
+            .hash = "oauth2-0.0.1-icZTHyhxAAC21zeqhbMjO8lRcTCI6WHqOJsa-4NGLZGe",
+        },
     },
     .paths = .{
         "build.zig",

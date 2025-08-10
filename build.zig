@@ -11,6 +11,7 @@ pub fn build(b: *std.Build) void {
     });
 
     // external deps.
+    const oauth2 = b.dependency("oauth2", .{ .target = target, .optimize = optimize }).module("oauth2");
     const zzz = b.dependency("zzz", .{
         .target = target,
         .optimize = optimize,
@@ -35,6 +36,7 @@ pub fn build(b: *std.Build) void {
     main.addImport("zzz", zzz);
     main.addImport("websocket", ws);
     main.addImport("zqlite", zqlite);
+    main.addImport("oauth2", oauth2);
     const embed = b.addModule("embed", .{
         .root_source_file = b.path("embed/module.zig"),
         .target = target,
