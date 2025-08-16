@@ -21,26 +21,47 @@ pub fn main() !void {
     const alloc = gpa.allocator();
     defer _ = gpa.deinit();
 
-    var http = try std.Thread.spawn(.{}, net.host_http, .{alloc});
-    defer http.join();
+    // Echo-only mode for Autobahn tests: set MUD_ECHO=1
+    var echo_mode = false;
+    if (std.process.getEnvVarOwned(alloc, "MUD_ECHO")) |val| {
+        defer alloc.free(val);
+        echo_mode = std.mem.eql(u8, std.mem.trim(u8, val, " \t\r\n"), "1");
+    } else |_| {}
 
-    var state = try State.init(alloc);
-    const state_ptr = &state;
+    if (echo_mode) {
+        // Minimal WS echo host; skip HTTP and game state threads.
+        const noop_handler = net.WsHandler{
+            .ctx = undefined,
+            .onConnect = struct { fn f(_: *anyopaque, _: usize, _: *net.Conn) anyerror!void { return; } }.f,
+            .onDisconnect = struct { fn f(_: *anyopaque, _: usize) void {} }.f,
+            .onMessage = struct { fn f(_: *anyopaque, _: usize, _: []const u8) anyerror!void { return; } }.f,
+        };
+        var ws = try std.Thread.spawn(.{}, net.host_ws, .{ alloc, &noop_handler });
+        defer ws.join();
+        // Park main thread indefinitely.
+        while (true) std.Thread.sleep(60 * 1_000_000_000);
+    } else {
+        var http = try std.Thread.spawn(.{}, net.host_http, .{alloc});
+        defer http.join();
 
-    const handler = net.WsHandler{
-        .ctx = state_ptr,
-        .onConnect = ws_onConnect,
-        .onDisconnect = ws_onDisconnect,
-        .onMessage = ws_onMessage,
-    };
+        var state = try State.init(alloc);
+        const state_ptr = &state;
 
-    var ws = try std.Thread.spawn(.{}, net.host_ws, .{ alloc, &handler });
-    defer ws.join();
+        const handler = net.WsHandler{
+            .ctx = state_ptr,
+            .onConnect = ws_onConnect,
+            .onDisconnect = ws_onDisconnect,
+            .onMessage = ws_onMessage,
+        };
 
-    const tick: f64 = 1.0 / cfg.tps;
-    const tick_ns = @as(u64, @intFromFloat(tick * 1e9));
-    while (true) {
-        try state.step(tick);
-        std.Thread.sleep(tick_ns);
+        var ws = try std.Thread.spawn(.{}, net.host_ws, .{ alloc, &handler });
+        defer ws.join();
+
+        const tick: f64 = 1.0 / cfg.tps;
+        const tick_ns = @as(u64, @intFromFloat(tick * 1e9));
+        while (true) {
+            try state.step(tick);
+            std.Thread.sleep(tick_ns);
+        }
     }
 }

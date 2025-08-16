@@ -64,7 +64,7 @@ const layers: [5]Layer = .{
 };
 
 pub fn host(alloc: std.mem.Allocator) !void {
-    var t = try Tardy.init(alloc, .{ .threading = .auto });
+    var t = try Tardy.init(alloc, .{ .threading = .single });
     defer t.deinit();
     var router = try Router.init(alloc, &layers, .{});
     defer router.deinit(alloc);

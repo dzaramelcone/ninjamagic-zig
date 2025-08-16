@@ -4,6 +4,8 @@ services:
     image: debian:bookworm-slim
     platform: linux/amd64
     volumes: [./zig-out/bin/mud:/usr/local/bin/mud]
+    environment:
+      - MUD_ECHO=1
     entrypoint: ["/usr/local/bin/mud"]
     ports:
       - "9862:9862"
