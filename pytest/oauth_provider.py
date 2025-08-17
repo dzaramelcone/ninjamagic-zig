@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Set
+from typing import Annotated
 from uuid import uuid4
 from enum import StrEnum
 
@@ -16,8 +16,7 @@ class Settings(BaseSettings):
     """
     client_id: str = "my-client-id"
     client_secret: str = "my-client-secret"
-    permitted_redirect_uri: HttpUrl | None = None
-    app_url: str = "http://localhost:8000"
+    app_url: str = "http://localhost:8001"
 
 
 class TokenRequest(BaseModel):
@@ -147,7 +146,7 @@ def get_session_data(
     token_info = tokens[token_str]
 
     # Check for token expiration
-    if token_info.expires_at < datetime.now(datetime.timezone.utc):
+    if token_info.expires_at < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="expired_token",
@@ -203,7 +202,7 @@ def authorize(
         ),
         redirect_uri=redirect_uri,
         client_id=client_id,
-        expires_at=datetime.now(datetime.timezone.utc) + timedelta(minutes=5),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
         state=state
     )
     redirect = f"{redirect_uri}?code={code}"
@@ -215,14 +214,16 @@ def authorize(
 @app.post("/token")
 async def token(
     grant_type: Annotated[str, Form()],
-    code: Annotated[str, Form()],
-    redirect_uri: Annotated[str, Form()],
-    client_id: Annotated[str, Form()],
-    client_secret: Annotated[str, Form()],
+    code: Annotated[str | None, Form()] = None,
+    redirect_uri: Annotated[str | None, Form()] = None,
+    client_id: Annotated[str | None, Form()] = None,
+    client_secret: Annotated[str | None, Form()] = None,
     refresh_token: Annotated[str | None, Form()] = None,
     state: Annotated[str | None, Form()] = None
 ) -> TokenResponse:
     if grant_type == "authorization_code":
+        if not code or not redirect_uri or not client_id or not client_secret:
+            raise HTTPException(status_code=400, detail="missing_required_fields_for_auth_code_flow")
             
         if code not in auth_codes:
             raise HTTPException(status_code=400, detail="invalid_grant")
@@ -238,7 +239,7 @@ async def token(
         if state and data.state != state:
             raise HTTPException(status_code=400, detail="invalid_state")
             
-        if data.expires_at < datetime.now(datetime.timezone.utc):
+        if data.expires_at < datetime.now(timezone.utc):
             raise HTTPException(status_code=400, detail="expired_code")
         
         access_token = uuid4().hex
@@ -247,7 +248,7 @@ async def token(
         tokens[access_token] = TokenInfo(
             scopes={Scope(s) for s in data.scopes},
             user=data.user,
-            expires_at=datetime.now(datetime.timezone.utc) + timedelta(hours=1),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
             iss=settings.app_url,
             aud=client_id
         )
@@ -255,7 +256,7 @@ async def token(
         refresh_tokens[new_refresh_token] = RefreshTokenInfo(
             user=data.user,
             scopes={Scope(s) for s in data.scopes},
-            expires_at=datetime.now(datetime.timezone.utc) + timedelta(days=7),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
             client_id=client_id
         )
 
@@ -276,7 +277,7 @@ async def token(
         
         refresh_token_data = refresh_tokens[refresh_token]
 
-        if refresh_token_data.expires_at < datetime.now(datetime.timezone.utc):
+        if refresh_token_data.expires_at < datetime.now(timezone.utc):
             raise HTTPException(status_code=400, detail="expired_refresh_token")
         
         # Invalidate old refresh token
@@ -288,7 +289,7 @@ async def token(
         tokens[access_token] = TokenInfo(
             scopes=refresh_token_data.scopes,
             user=refresh_token_data.user,
-            expires_at=datetime.now(datetime.timezone.utc) + timedelta(hours=1),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
             iss=settings.app_url,
             aud=refresh_token_data.client_id
         )
@@ -296,7 +297,7 @@ async def token(
         refresh_tokens[new_refresh_token] = RefreshTokenInfo(
             user=refresh_token_data.user,
             scopes=refresh_token_data.scopes,
-            expires_at=datetime.now(datetime.timezone.utc) + timedelta(days=7),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
             client_id=refresh_token_data.client_id
         )
 
