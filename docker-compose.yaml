@@ -4,19 +4,13 @@ services:
     image: debian:bookworm-slim
     platform: linux/amd64
     volumes: [./zig-out/bin/mud:/usr/local/bin/mud]
-    environment:
-      - MUD_ECHO=1
     entrypoint: ["/usr/local/bin/mud"]
-    ports:
-      - "9862:9862"
-      - "9224:9224"
+    ports: [9862:9862, 9224:9224]
 
   auto:
     image: crossbario/autobahn-testsuite:latest
     profiles: ["test"]
-    volumes:
-      - ./config:/config
-      - ./reports:/reports
+    volumes: [./config:/config, ./reports:/reports]
     command: ["wstest", "-m", "fuzzingclient", "-s", "/config/fuzzingclient.json"]
 
   test:

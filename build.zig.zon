@@ -41,6 +41,10 @@
             .url = "git+https://github.com/karlseguin/pg.zig?ref=master#842541eb22a6da1e43a2e78c1b20b5ea88aa9366",
             .hash = "pg-0.0.0-Wp_7gfMCBgDT6BLHD1r7hNtVeXs6yJbFBkNar4uY-ZDB",
         },
+        .struct_env = .{
+            .url = "git+https://github.com/Hanaasagi/struct-env#fdb2e6342725a091fa2f1e44fb2b998e4b711c1f",
+            .hash = "struct_env-0.4.0-TJSARmVxAABT16OO_4jTBRQCGZvgulMt2qchVGEWgxug",
+        },
     },
     .paths = .{
         "build.zig",
