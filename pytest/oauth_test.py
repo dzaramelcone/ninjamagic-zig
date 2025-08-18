@@ -69,7 +69,6 @@ def home():
         f"{settings.provider_redirect}/authorize",
         params=auth_params.model_dump()
     ).prepare().url
-    print(f"redirect to {auth_url}")
     return RedirectResponse(auth_url)
 
 @app.get("/callback")

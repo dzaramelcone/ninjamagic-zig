@@ -17,6 +17,10 @@ pub const AnyCaseStringMap = @import("AnyCaseStringMap.zig").AnyCaseStringMap;
 pub const PrefixStringRegistry = @import("PrefixStringRegistry.zig").PrefixStringRegistry;
 pub const Channel = @import("channel.zig").Channel;
 
+pub const quote = @import("quote.zig").quote;
+pub const quoteParams = @import("quote.zig").quoteParams;
+pub const Form = @import("quote.zig").Form;
+
 test {
     @import("std").testing.refAllDecls(@This());
 }

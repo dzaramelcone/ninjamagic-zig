@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     """
     client_id: str = "my-client-id"
     client_secret: str = "my-client-secret"
-    app_url: str = "http://localhost:8001"
+    app_url: str = "http://localhost:9224"
 
 
 class TokenRequest(BaseModel):
@@ -210,7 +210,8 @@ def authorize(
         redirect += f"&state={state}"
     return RedirectResponse(redirect)
 
-
+import logging
+log = logging.getLogger()
 @app.post("/token")
 async def token(
     grant_type: Annotated[str, Form()],
@@ -221,25 +222,33 @@ async def token(
     refresh_token: Annotated[str | None, Form()] = None,
     state: Annotated[str | None, Form()] = None
 ) -> TokenResponse:
+    log.error(f"{grant_type}, {code}, {redirect_uri}, {client_id}, {client_secret}, {refresh_token}, {state}")
     if grant_type == "authorization_code":
         if not code or not redirect_uri or not client_id or not client_secret:
+            log.error("missing_required_fields_for_auth_code_flow")
             raise HTTPException(status_code=400, detail="missing_required_fields_for_auth_code_flow")
             
         if code not in auth_codes:
+            log.error("invalid_grant")
             raise HTTPException(status_code=400, detail="invalid_grant")
 
         data = auth_codes.pop(code)
         
         if client_id != data.client_id:
+            log.error("invalid_client")
             raise HTTPException(status_code=400, detail="invalid_client")
         if client_secret != settings.client_secret:
+            log.error(f"invalid_client_secret. expected {settings.client_secret}, got {client_secret}")
             raise HTTPException(status_code=401, detail="invalid_client_secret")
         if data.redirect_uri != redirect_uri:
+            log.error("missing_required_fields_for_auth_code_flow")
             raise HTTPException(status_code=400, detail="invalid_redirect")
         if state and data.state != state:
+            log.error("invalid_state")
             raise HTTPException(status_code=400, detail="invalid_state")
             
         if data.expires_at < datetime.now(timezone.utc):
+            log.error("expired_code")
             raise HTTPException(status_code=400, detail="expired_code")
         
         access_token = uuid4().hex

@@ -27,16 +27,6 @@ services:
 
   oauth:
     image: tiangolo/uvicorn-gunicorn-fastapi:python3.11-slim
-    environment: ["CLIENT_ID=ninjamagic", "CLIENT_SECRET=secret"]
     volumes: [./pytest/oauth_provider.py:/app/main.py]
     command: ["/bin/sh", "-c", "pip install --quiet faker && uvicorn main:app --host 0.0.0.0"]
     ports: ["8000:8000"]
-
-  oauthtest:
-    image: tiangolo/uvicorn-gunicorn-fastapi:python3.11-slim
-    environment:
-      - CLIENT_ID=ninjamagic
-      - CLIENT_SECRET=secret
-    volumes: [./pytest/oauth_test.py:/app/main.py]
-    command: ["/bin/sh", "-c", "pip install --quiet requests && uvicorn main:app --host 0.0.0.0"]
-    ports: ["8001:8000"]
