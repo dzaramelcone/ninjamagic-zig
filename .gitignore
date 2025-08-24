@@ -4,3 +4,4 @@ logs
 zig-out
 **/__pycache__
 reports/
+.DS_Store
