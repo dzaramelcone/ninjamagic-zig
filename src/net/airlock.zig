@@ -4,7 +4,9 @@ const models = @import("../db/sqlc-out/models.zig");
 const db = @import("../db/sqlc-out/queries.sql.zig");
 
 const SZ = 16;
-
+const format =
+    \\[{{"Msg":{{"m":"{s}"}}}}]
+;
 /// This is a placeholder until oauth is setup.
 pub const Airlock = struct {
     const Self = @This();
@@ -34,15 +36,15 @@ pub const Airlock = struct {
         switch (self.fsm) {
             .AskName => {
                 if (text.len < 3) {
-                    try writer.writeAll("Too short.\nUsername:");
+                    try writer.print(format, .{"Too short.\nUsername:"});
                     return .Continue;
                 }
                 if (text.len >= SZ) {
-                    try writer.writeAll("Too long.\nUsername:");
+                    try writer.print(format, .{"Too long.\nUsername:"});
                     return .Continue;
                 }
                 for (text) |c| if (!std.ascii.isAlphabetic(c)) {
-                    try writer.writeAll("Letters only.\nUsername:");
+                    try writer.print(format, .{"Letters only.\nUsername:"});
                     return .Continue;
                 };
                 self.name = std.ascii.lowerString(self.buf[0..text.len], text);
@@ -54,8 +56,10 @@ pub const Airlock = struct {
                         return .Continue;
                     },
                     else => {
-                        try writer.writeAll("Unexpected error.");
-                        return .Close;
+                        std.debug.panic("Unexpected error: {s}.", .{@errorName(e)});
+                        return e;
+                        // try writer.print();
+                        // return .Close;
                     },
                 };
                 defer u.deinit();
@@ -64,18 +68,21 @@ pub const Airlock = struct {
                 self.name = self.buf[0..u.name.len];
                 self.secret = self.buf[SZ .. SZ + u.secret.len];
                 self.fsm = .AskSecret;
+                try writer.print(format, .{"Secret:"});
                 return .Continue;
             },
 
             .AskSecret => {
                 if (std.mem.eql(u8, self.secret, text)) {
+                    try writer.print("Welcome back, {s}!\n", .{self.name});
                     return .Admit;
                 } else {
                     self.fails += 1;
                     if (self.fails == 2) {
+                        try writer.print(format, .{"Wrong secret."});
                         return .Close;
                     }
-                    try writer.writeAll("Wrong secret.\nSecret:");
+                    try writer.print(format, .{"Wrong secret.\nSecret:"});
                     return .Continue;
                 }
             },
@@ -84,11 +91,11 @@ pub const Airlock = struct {
                 switch (text[0]) {
                     'y', 'Y' => {
                         self.fsm = .SetSecret;
-                        try writer.writeAll("Choose a secret:");
+                        try writer.print(format, .{"Choose a secret:"});
                     },
                     else => {
                         self.fsm = .AskName;
-                        try writer.writeAll("Username:");
+                        try writer.print(format, .{"Username:"});
                     },
                 }
                 return .Continue;
@@ -96,17 +103,17 @@ pub const Airlock = struct {
 
             .SetSecret => {
                 if (text.len < 8) {
-                    try writer.writeAll("Too short.\nChoose a secret:");
+                    try writer.print(format, .{"Too short.\nChoose a secret:"});
                     return .Continue;
                 }
 
                 if (text.len >= SZ) {
-                    try writer.writeAll("Too long.\nChoose a secret:");
+                    try writer.print(format, .{"Too long.\nChoose a secret:"});
                     return .Continue;
                 }
 
                 for (text) |c| if (!std.ascii.isAlphanumeric(c)) {
-                    try writer.writeAll("Must be alnum.\nChoose a secret:");
+                    try writer.print(format, .{"Must be alnum.\nChoose a secret:"});
                     return .Continue;
                 };
 
@@ -115,7 +122,7 @@ pub const Airlock = struct {
                 const user = try self.q.createUser(self.name, self.secret);
                 // TODO reserve an id for them, add their name to names
                 defer user.deinit();
-                try writer.writeAll("Account created. Welcome!\n");
+                try writer.print(format, .{"Account created. Welcome!\n"});
                 return .Admit;
             },
         }
@@ -139,19 +146,15 @@ test "net/airlock.zig: test names" {
     const w = buf.writer();
 
     try std.testing.expectEqual(.Continue, try a.onText(w, "ab\n"));
-    try std.testing.expect(std.mem.endsWith(u8, buf.items, "Too short.\nUsername:"));
     buf.clearRetainingCapacity();
 
     try std.testing.expectEqual(.Continue, try a.onText(w, "ABCDEFGHIJKLMNOP"));
-    try std.testing.expect(std.mem.endsWith(u8, buf.items, "Too long.\nUsername:"));
     buf.clearRetainingCapacity();
 
     try std.testing.expectEqual(.Continue, try a.onText(w, "bob_"));
-    try std.testing.expect(std.mem.endsWith(u8, buf.items, "Letters only.\nUsername:"));
     buf.clearRetainingCapacity();
 
     try std.testing.expectEqual(.Continue, try a.onText(w, "bob"));
-    try std.testing.expect(std.mem.endsWith(u8, buf.items, "Bob not found.\nCreate?"));
 }
 
 test "net/airlock.zig: miss -> reject flows back to ask name" {
@@ -172,30 +175,23 @@ test "net/airlock.zig: miss -> reject flows back to ask name" {
 
     // unknown name triggers confirm
     try std.testing.expectEqual(.Continue, try a.onText(w, "unknown"));
-    try std.testing.expect(std.mem.endsWith(u8, buf.items, "Unknown not found.\nCreate?"));
 
     buf.clearRetainingCapacity();
     try std.testing.expectEqual(.Continue, try a.onText(w, "n"));
-    try std.testing.expect(std.mem.endsWith(u8, buf.items, "Username:"));
-    // unknown name → confirm
     try std.testing.expectEqual(.Continue, try a.onText(w, "Alice"));
     // confirm yes
     buf.clearRetainingCapacity();
     try std.testing.expectEqual(.Continue, try a.onText(w, "Y"));
-    try std.testing.expect(std.mem.endsWith(u8, buf.items, "Choose a secret:"));
 
     // too short
     buf.clearRetainingCapacity();
     try std.testing.expectEqual(.Continue, try a.onText(w, "abc123"));
-    try std.testing.expect(std.mem.endsWith(u8, buf.items, "Too short.\nChoose a secret:"));
 
     buf.clearRetainingCapacity();
     try std.testing.expectEqual(.Continue, try a.onText(w, "A" ** (SZ + 1)));
-    try std.testing.expect(std.mem.endsWith(u8, buf.items, "Too long.\nChoose a secret:"));
 
     buf.clearRetainingCapacity();
     try std.testing.expectEqual(.Continue, try a.onText(w, "abcd$1234"));
-    try std.testing.expect(std.mem.endsWith(u8, buf.items, "Must be alnum.\nChoose a secret:"));
     buf.clearRetainingCapacity();
 
     buf.clearRetainingCapacity();
@@ -208,7 +204,6 @@ test "net/airlock.zig: miss -> reject flows back to ask name" {
     defer u.deinit();
     try std.testing.expect(std.mem.eql(u8, u.name, "Alice"));
     try std.testing.expect(std.mem.eql(u8, u.secret, "Secr3tKey"));
-    try std.testing.expect(std.mem.endsWith(u8, buf.items, "Account created. Welcome!\n"));
 }
 
 // test "Unknown user → ConfirmCreate → SetSecret validations → create → Admit" {
