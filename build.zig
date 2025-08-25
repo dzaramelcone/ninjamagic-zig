@@ -67,12 +67,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addImport("websocket", ws);
     tests.root_module.addImport("zqlite", zqlite);
     tests.root_module.addImport("embed", embed);
-    // add C/SQLite for db use in tests
-    tests.root_module.addCSourceFile(.{
-        .file = b.path("embed/sqlite/sqlite3.c"),
-        .flags = &[_][]const u8{"-std=c99"},
-    });
-    tests.root_module.link_libc = true;
     const run_exe_unit_tests = b.addRunArtifact(tests);
 
     const test_step = b.step("test", "Run unit tests");
