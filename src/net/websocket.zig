@@ -69,7 +69,7 @@ pub fn Handler(comptime T: type) type {
                             try self.impl.onConnect(self.id, self.conn);
                             return;
                         },
-                        .Close => try self.conn.close(.{ .code = 1000 }),
+                        .Close => self.close(),
                     }
                 },
                 .Session => {
@@ -79,6 +79,8 @@ pub fn Handler(comptime T: type) type {
         }
 
         pub fn close(self: *Self) void {
+            self.impl.onDisconnect(self.id);
+            self.conn.close(.{}) catch {};
             self.deinit();
         }
     };
