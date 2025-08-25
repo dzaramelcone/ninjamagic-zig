@@ -134,8 +134,8 @@ fn callback(ctx: *const Context, _: void) anyerror!Respond {
 }
 
 const layers = [_]Layer{
-    Route.init("/login").get({}, login).layer(),
-    Route.init("/callback").get({}, callback).layer(),
+    // Route.init("/login").get({}, login).layer(),
+    // Route.init("/callback").get({}, callback).layer(),
     Route.init(embed.hosted_files[0].path).get({}, serveStatic(embed.hosted_files[0])).layer(),
     Route.init(embed.hosted_files[1].path).get({}, serveStatic(embed.hosted_files[1])).layer(),
     Route.init(embed.hosted_files[2].path).get({}, serveStatic(embed.hosted_files[2])).layer(),

@@ -38,8 +38,8 @@
     .dependencies = .{
         .zzz = .{ .url = "git+https://github.com/tardy-org/zzz#18ec7f1129ce4d0573b7c67f011b4d05c7b195d4", .hash = "zzz-0.3.0-4HoaJrBQAgCXB_66nre0nvYZmAXMxj__gS8sFjpR68Hs" },
         .zqlite = .{
-            .url = "git+https://github.com/karlseguin/zqlite.zig?ref=master#61568e7d59ac7d05ce8e32c287b26bfbab0126a6",
-            .hash = "122003755f1656fff4295cbee88fbc70407650fa815187f621bedbdf6fd0a1da83e6",
+            .url = "git+https://github.com/karlseguin/zqlite.zig?ref=master#74e661633ffe04fadc214ad07857633fa339f79c",
+            .hash = "zqlite-0.0.0-RWLaY81-lQAbR_uUQJeKmTzYi16C9Zvl-BjrBOavQfeK",
         },
         .websocket = .{
             .url = "git+https://github.com/karlseguin/websocket.zig?ref=master#10b0e7be2158ff22733f1e59c1ae0bace5bf3a0c",

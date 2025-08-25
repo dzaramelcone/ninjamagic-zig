@@ -1,6 +1,6 @@
 const websocket = @import("websocket");
 const zzz = @import("zzz");
-
+const zqlite = @import("zqlite");
 // This is what env vars look like:
 // const log = std.io.getStdOut().writer();
 // const env_map = try alloc.create(std.process.EnvMap);
@@ -20,6 +20,13 @@ pub const Config = struct {
             .max_size = 1024,
             .max_headers = 0,
         },
+    };
+    pub const Zqlite: zqlite.Pool.Config = .{
+        .size = 5,
+        .path = "./test.db",
+        .flags = zqlite.OpenFlags.Create | zqlite.OpenFlags.EXResCode,
+        .on_connection = null,
+        .on_first_connection = null,
     };
 
     pub const Zzz: struct {
