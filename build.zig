@@ -26,10 +26,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }).module("zqlite");
 
-    main.addCSourceFile(.{
-        .file = b.path("embed/sqlite/sqlite3.c"),
-        .flags = &[_][]const u8{"-std=c99"},
-    });
     main.link_libc = true;
 
     main.addImport("zzz", zzz);
